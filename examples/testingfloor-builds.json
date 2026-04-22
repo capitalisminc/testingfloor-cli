@@ -1,0 +1,31 @@
+{
+  "gameId": 42,
+  "version": "0.4.12",
+  "gitSha": "abc123",
+  "sourceRef": {
+    "provider": "github_actions"
+  },
+  "builds": [
+    {
+      "platform": "windows",
+      "archive": "./Builds/game-windows.zip",
+      "launchPath": "Game.exe",
+      "launchArgs": [],
+      "workingDirectory": "."
+    },
+    {
+      "platform": "macos",
+      "archive": "./Builds/game-macos.zip",
+      "launchPath": "Game.app",
+      "launchArgs": [],
+      "workingDirectory": "."
+    },
+    {
+      "platform": "linux",
+      "archive": "./Builds/game-linux.zip",
+      "launchPath": "Game.x86_64",
+      "launchArgs": [],
+      "workingDirectory": "."
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "name": "@testingfloor/cli",
+  "version": "0.1.0",
+  "description": "Minimal CLI for uploading game builds to Testing Floor.",
+  "type": "module",
+  "bin": {
+    "testingfloor": "./bin/testingfloor.js"
+  },
+  "scripts": {
+    "lint": "node --check bin/testingfloor.js && node --check src/action.js && node --check src/action-core.js && node --check src/cli.js && node --check test/cli.test.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "action.yml",
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "testingfloor",
+    "gamedev",
+    "ci",
+    "build-upload"
+  ],
+  "license": "MIT"
+}

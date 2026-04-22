@@ -1,0 +1,64 @@
+name: Upload Testing Floor build
+description: Upload a ready-to-run game build archive to Testing Floor.
+author: Capitalism Inc.
+
+inputs:
+  api-token:
+    description: Testing Floor API key with builds:create scope.
+    required: true
+  api-url:
+    description: Testing Floor base URL.
+    required: false
+    default: https://testingfloor.com
+  game-id:
+    description: Numeric Testing Floor game id.
+    required: true
+  platform:
+    description: "Testing Floor platform: windows, macos, or linux."
+    required: true
+  archive:
+    description: Existing zip archive to upload. If omitted, build-directory is zipped first.
+    required: false
+  build-directory:
+    description: Directory to zip and upload when archive is omitted.
+    required: false
+  filename:
+    description: Filename to store for the uploaded archive.
+    required: false
+  version:
+    description: Build version metadata.
+    required: true
+  git-sha:
+    description: Git SHA metadata.
+    required: false
+  launch-path:
+    description: Executable path inside the extracted archive.
+    required: true
+  launch-args:
+    description: JSON array of launch arguments.
+    required: false
+    default: "[]"
+  working-directory:
+    description: Working directory inside the extracted archive.
+    required: false
+    default: "."
+  source-ref:
+    description: JSON object of source metadata to store with the build.
+    required: false
+    default: "{}"
+
+outputs:
+  build-id:
+    description: Testing Floor game_build id.
+  status:
+    description: Final build status.
+  ready-at:
+    description: Ready timestamp returned by Testing Floor.
+  checksum-sha256:
+    description: SHA-256 checksum of the uploaded archive.
+  size-bytes:
+    description: Uploaded archive size.
+
+runs:
+  using: node20
+  main: src/action.js
