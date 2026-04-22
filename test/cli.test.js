@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { parseJsonInput, readInputs, resolveActionBuild } from "../src/action-core.js";
+import { parseJsonInput, readInputs, resolveActionBuild, zipBuildDirectory } from "../src/action-core.js";
 import { normalizeConfiguredBuilds, parseArgs, parseSourceRefEntries, resolveUploadPlan } from "../src/cli.js";
 
 test("parseArgs parses single build flags", () => {
@@ -152,6 +152,30 @@ test("readInputs accepts GitHub's hyphenated action input environment names", ()
   assert.equal(inputs.launchPath, "Game.exe");
   assert.deepEqual(inputs.launchArgs, ["--safe"]);
   assert.deepEqual(inputs.sourceRef, { run_id: "123" });
+});
+
+test("zipBuildDirectory creates a ZIP64 archive from a build directory", async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  const buildDirectory = path.join(cwd, "build");
+  const runnerTemp = path.join(cwd, "tmp");
+  const archivePath = path.join(runnerTemp, "game.zip");
+  await mkdir(path.join(buildDirectory, "Data"), { recursive: true });
+  await writeFile(path.join(buildDirectory, "Game.exe"), "binary");
+  await writeFile(path.join(buildDirectory, "Data", "config.json"), "{\"quality\":\"test\"}");
+
+  const result = await zipBuildDirectory({
+    archiveName: "game.zip",
+    buildDirectory,
+    runnerTemp
+  });
+  const archive = await readFile(archivePath);
+
+  assert.equal(result, archivePath);
+  assert.equal(archive.subarray(0, 4).toString("hex"), "504b0304");
+  assert.notEqual(archive.indexOf(Buffer.from("Game.exe")), -1);
+  assert.notEqual(archive.indexOf(Buffer.from("Data/config.json")), -1);
+  assert.notEqual(archive.indexOf(Buffer.from([0x50, 0x4b, 0x06, 0x06])), -1);
+  assert.notEqual(archive.indexOf(Buffer.from([0x50, 0x4b, 0x06, 0x07])), -1);
 });
 
 test("parseJsonInput validates action JSON inputs", () => {

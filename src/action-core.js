@@ -1,10 +1,11 @@
-import { spawn } from "node:child_process";
-import { appendFileSync } from "node:fs";
-import { access, mkdir, stat } from "node:fs/promises";
+import { appendFileSync, createReadStream, createWriteStream } from "node:fs";
+import { access, lstat, mkdir, opendir, readlink, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
+import { finished } from "node:stream/promises";
 
+import ZipStream from "zip-stream";
 import { resolveUploadPlan, uploadBuild } from "./cli.js";
 
 export async function runAction(env = process.env, cwd = process.cwd()) {
@@ -110,78 +111,88 @@ export async function zipBuildDirectory({ buildDirectory, archiveName, runnerTem
   await mkdir(runnerTemp, { recursive: true });
   const archivePath = path.join(runnerTemp, archiveName);
 
-  if (process.platform === "win32") {
-    await zipWithPowerShell(directory, archivePath);
-  } else {
-    await zipWithZip(directory, archivePath);
-  }
-
+  await createZipArchive({ directory, archivePath });
   await access(archivePath);
   return archivePath;
 }
 
-function zipWithPowerShell(directory, archivePath) {
-  const script = [
-    "$ErrorActionPreference = 'Stop'",
-    "Remove-Item -Force $env:TF_ARCHIVE_PATH -ErrorAction SilentlyContinue",
-    "Compress-Archive -Path (Join-Path $env:TF_BUILD_DIR '*') -DestinationPath $env:TF_ARCHIVE_PATH -Force"
-  ].join("; ");
+async function createZipArchive({ directory, archivePath }) {
+  const archive = new ZipStream({ forceZip64: true, zlib: { level: 6 } });
+  const output = createWriteStream(archivePath);
+  archive.pipe(output);
 
-  return runFirstAvailable([
-    { command: "pwsh", args: ["-NoProfile", "-NonInteractive", "-Command", script] },
-    { command: "powershell", args: ["-NoProfile", "-NonInteractive", "-Command", script] }
-  ], {
-    ...process.env,
-    TF_ARCHIVE_PATH: archivePath,
-    TF_BUILD_DIR: directory
-  });
+  const archiveDone = finished(archive);
+  const outputDone = finished(output);
+
+  try {
+    for await (const entry of walkArchiveEntries(directory)) {
+      if (entry.type === "directory") {
+        await addZipEntry(archive, Buffer.alloc(0), {
+          date: entry.stats.mtime,
+          mode: entry.stats.mode,
+          name: entry.name,
+          type: "directory"
+        });
+      } else if (entry.type === "symlink") {
+        await addZipEntry(archive, entry.linkname, {
+          date: entry.stats.mtime,
+          mode: entry.stats.mode,
+          name: entry.name,
+          type: "symlink"
+        });
+      } else {
+        await addZipEntry(archive, createReadStream(entry.fullPath), {
+          date: entry.stats.mtime,
+          mode: entry.stats.mode,
+          name: entry.name
+        });
+      }
+    }
+
+    archive.finish();
+    await Promise.all([archiveDone, outputDone]);
+  } catch (error) {
+    archive.destroy(error);
+    output.destroy(error);
+    await Promise.allSettled([archiveDone, outputDone]);
+    throw error;
+  }
 }
 
-function zipWithZip(directory, archivePath) {
-  return runCommand("zip", ["-qr", archivePath, "."], { cwd: directory });
+async function* walkArchiveEntries(root, current = root) {
+  const directory = await opendir(current);
+
+  for await (const dirent of directory) {
+    const fullPath = path.join(current, dirent.name);
+    const stats = await lstat(fullPath);
+    const name = normalizeZipPath(path.relative(root, fullPath));
+
+    if (stats.isDirectory()) {
+      yield { fullPath, name: `${name}/`, stats, type: "directory" };
+      yield* walkArchiveEntries(root, fullPath);
+    } else if (stats.isSymbolicLink()) {
+      yield { fullPath, linkname: await readlink(fullPath), name, stats, type: "symlink" };
+    } else if (stats.isFile()) {
+      yield { fullPath, name, stats, type: "file" };
+    }
+  }
 }
 
-function runFirstAvailable(commands, env) {
+function addZipEntry(archive, source, data) {
   return new Promise((resolve, reject) => {
-    const tryNext = (index) => {
-      const spec = commands[index];
-      if (!spec) {
-        reject(new Error("PowerShell is required to zip builds on Windows."));
+    archive.entry(source, data, (error) => {
+      if (error) {
+        reject(error);
         return;
       }
 
-      runCommand(spec.command, spec.args, { env })
-        .then(resolve)
-        .catch((error) => {
-          if (error.code === "ENOENT") {
-            tryNext(index + 1);
-          } else {
-            reject(error);
-          }
-        });
-    };
-
-    tryNext(0);
+      resolve();
+    });
   });
 }
 
-function runCommand(command, args, options = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd: options.cwd,
-      env: options.env ?? process.env,
-      stdio: "inherit"
-    });
-
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`${command} exited with ${code}`));
-      }
-    });
-  });
+function normalizeZipPath(value) {
+  return value.split(path.sep).join("/");
 }
 
 function defaultArchiveName({ env, inputs }) {

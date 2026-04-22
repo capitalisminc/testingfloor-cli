@@ -95,7 +95,7 @@ Use this repository directly as a GitHub Action:
       }
 ```
 
-The action accepts either `archive` or `build-directory`. When `build-directory` is supplied, the action creates a zip archive before upload.
+The action accepts either `archive` or `build-directory`. When `build-directory` is supplied, the action creates a ZIP64 archive in Node before upload, without relying on runner-provided zip, tar, or PowerShell tooling.
 
 You can also run the CLI directly:
 
