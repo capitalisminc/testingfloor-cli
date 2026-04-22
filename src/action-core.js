@@ -190,7 +190,9 @@ function defaultArchiveName({ env, inputs }) {
 }
 
 function input(env, name) {
-  const value = env[`INPUT_${name.toUpperCase().replaceAll("-", "_")}`];
+  const actionName = `INPUT_${name.replaceAll(" ", "_").toUpperCase()}`;
+  const shellName = `INPUT_${name.toUpperCase().replaceAll("-", "_")}`;
+  const value = env[actionName] ?? env[shellName];
   return value === undefined || value === "" ? null : value;
 }
 

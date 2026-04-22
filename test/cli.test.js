@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { parseJsonInput, resolveActionBuild } from "../src/action-core.js";
+import { parseJsonInput, readInputs, resolveActionBuild } from "../src/action-core.js";
 import { normalizeConfiguredBuilds, parseArgs, parseSourceRefEntries, resolveUploadPlan } from "../src/cli.js";
 
 test("parseArgs parses single build flags", () => {
@@ -132,6 +132,26 @@ test("resolveActionBuild accepts explicit platform launch metadata and build dir
   assert.equal(build.filename, "build-windows-0.4.12.zip");
   assert.equal(build.launchPath, "Game.exe");
   assert.equal(build.platform, "windows");
+});
+
+test("readInputs accepts GitHub's hyphenated action input environment names", () => {
+  const inputs = readInputs({
+    "INPUT_API-TOKEN": "tf_builds",
+    "INPUT_GAME-ID": "42",
+    INPUT_PLATFORM: "windows",
+    "INPUT_BUILD-DIRECTORY": "build/Mono/Release/StandaloneWindows64",
+    "INPUT_LAUNCH-PATH": "Game.exe",
+    INPUT_VERSION: "0.4.12",
+    "INPUT_SOURCE-REF": "{\"run_id\":\"123\"}",
+    "INPUT_LAUNCH-ARGS": "[\"--safe\"]"
+  });
+
+  assert.equal(inputs.apiToken, "tf_builds");
+  assert.equal(inputs.gameId, "42");
+  assert.equal(inputs.buildDirectory, "build/Mono/Release/StandaloneWindows64");
+  assert.equal(inputs.launchPath, "Game.exe");
+  assert.deepEqual(inputs.launchArgs, ["--safe"]);
+  assert.deepEqual(inputs.sourceRef, { run_id: "123" });
 });
 
 test("parseJsonInput validates action JSON inputs", () => {
