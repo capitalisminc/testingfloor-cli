@@ -201,13 +201,28 @@ export async function uploadBuild(plan, build, { log = console.error } = {}) {
   });
 
   log(`Uploading ${build.filename} (${formatBytes(file.size)}) to build ${createResponse.id}`);
-  await uploadFile(createResponse.upload_url, createResponse.upload_headers ?? {}, build.archivePath, file.size);
+  let multipartUpload = null;
+  if (createResponse.multipart_upload) {
+    multipartUpload = await uploadMultipartFile(
+      createResponse.multipart_upload,
+      build.archivePath,
+      file.size,
+      { log }
+    );
+  } else {
+    await uploadFile(createResponse.upload_url, createResponse.upload_headers ?? {}, build.archivePath, file.size, {
+      label: "Direct upload"
+    });
+  }
 
   log(`Completing build ${createResponse.id}`);
   const completeResponse = await postJson(
     `${plan.apiUrl}/api/game_builds/${createResponse.id}/complete`,
     plan.token,
-    { signed_id: createResponse.signed_id }
+    {
+      signed_id: createResponse.signed_id,
+      multipart_upload: multipartUpload
+    }
   );
 
   return {
@@ -375,10 +390,61 @@ async function postJson(url, token, body) {
   return parsed;
 }
 
-function uploadFile(uploadUrl, uploadHeaders, filePath, size) {
+async function uploadMultipartFile(multipartUpload, filePath, size, { log = console.error } = {}) {
+  const uploadId = multipartUpload.upload_id ?? multipartUpload.uploadId;
+  const partSize = Number(multipartUpload.part_size ?? multipartUpload.partSize);
+  const parts = multipartUpload.parts ?? [];
+
+  if (!uploadId) {
+    throw new Error("Multipart upload response is missing upload_id.");
+  }
+
+  if (!Number.isSafeInteger(partSize) || partSize <= 0) {
+    throw new Error("Multipart upload response has an invalid part_size.");
+  }
+
+  if (!Array.isArray(parts) || parts.length === 0) {
+    throw new Error("Multipart upload response is missing parts.");
+  }
+
+  const completedParts = [];
+  for (const part of parts) {
+    const partNumber = Number(part.part_number ?? part.partNumber);
+    if (!Number.isSafeInteger(partNumber) || partNumber <= 0) {
+      throw new Error("Multipart upload response has an invalid part number.");
+    }
+
+    const start = (partNumber - 1) * partSize;
+    const end = Math.min(start + partSize, size) - 1;
+    if (start >= size || end < start) {
+      throw new Error(`Multipart part ${partNumber} is outside the archive size.`);
+    }
+
+    const partLength = end - start + 1;
+    log(`Uploading part ${partNumber}/${parts.length} (${formatBytes(partLength)})`);
+    const headers = await uploadFile(part.upload_url ?? part.uploadUrl, part.upload_headers ?? {}, filePath, partLength, {
+      end,
+      label: `Multipart part ${partNumber}`,
+      start
+    });
+    const etag = headerValue(headers, "etag");
+    if (!etag) {
+      throw new Error(`Multipart part ${partNumber} did not return an ETag.`);
+    }
+
+    completedParts.push({ part_number: partNumber, etag });
+  }
+
+  return {
+    upload_id: uploadId,
+    parts: completedParts.sort((left, right) => left.part_number - right.part_number)
+  };
+}
+
+function uploadFile(uploadUrl, uploadHeaders, filePath, size, { start, end, label = "Upload" } = {}) {
   const url = new URL(uploadUrl);
   const client = url.protocol === "https:" ? https : http;
-  const headers = { ...uploadHeaders, "Content-Length": size };
+  const headers = compactHeaders({ ...uploadHeaders, "Content-Length": String(size) });
 
   return new Promise((resolve, reject) => {
     const request = client.request(url, { method: "PUT", headers }, (response) => {
@@ -389,16 +455,31 @@ function uploadFile(uploadUrl, uploadHeaders, filePath, size) {
       });
       response.on("end", () => {
         if (response.statusCode >= 200 && response.statusCode < 300) {
-          resolve();
+          resolve(response.headers);
         } else {
-          reject(new Error(`Direct upload failed with ${response.statusCode}: ${body}`));
+          reject(new Error(`${label} failed with ${response.statusCode}: ${body}`));
         }
       });
     });
 
     request.on("error", reject);
-    createReadStream(filePath).on("error", reject).pipe(request);
+    createReadStream(filePath, streamOptions({ start, end })).on("error", reject).pipe(request);
   });
+}
+
+function compactHeaders(headers) {
+  return Object.fromEntries(
+    Object.entries(headers).filter(([, value]) => value !== undefined && value !== null && value !== "")
+  );
+}
+
+function headerValue(headers, name) {
+  const value = headers[name.toLowerCase()];
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function streamOptions({ start, end }) {
+  return compact({ start, end });
 }
 
 function compact(value) {
