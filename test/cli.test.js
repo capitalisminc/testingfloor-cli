@@ -6,7 +6,17 @@ import path from "node:path";
 import test from "node:test";
 
 import { parseJsonInput, readInputs, resolveActionBuild, zipBuildDirectory } from "../src/action-core.js";
-import { normalizeConfiguredBuilds, parseArgs, parseSourceRefEntries, resolveUploadPlan, uploadBuild } from "../src/cli.js";
+import {
+  normalizeConfiguredBuilds,
+  parseArgs,
+  parseBoundsString,
+  parseSourceRefEntries,
+  resolveMapPlan,
+  resolveUploadPlan,
+  uploadBuild,
+  uploadMap
+} from "../src/cli.js";
+import { readMapInputs } from "../src/action-map.js";
 
 test("parseArgs parses single build flags", () => {
   const parsed = parseArgs([
@@ -284,6 +294,258 @@ test("parseJsonInput validates action JSON inputs", () => {
   assert.deepEqual(parseJsonInput("{\"run_id\":\"123\"}", "source-ref"), { run_id: "123" });
   assert.throws(() => parseJsonInput("{}", "launch-args"), /JSON array/);
   assert.throws(() => parseJsonInput("[]", "source-ref"), /JSON object/);
+});
+
+test("parseArgs parses upload-map flags", () => {
+  const parsed = parseArgs([
+    "upload-map",
+    "--game-id",
+    "42",
+    "--level-id",
+    "factory",
+    "--image",
+    "factory.png",
+    "--bounds",
+    "0,0,200,200",
+    "--app-version=0.4.12",
+    "--horizontal-axis",
+    "x",
+    "--vertical-axis",
+    "z"
+  ]);
+
+  assert.equal(parsed.command, "upload-map");
+  assert.equal(parsed.options.gameId, "42");
+  assert.equal(parsed.options.levelId, "factory");
+  assert.equal(parsed.options.image, "factory.png");
+  assert.equal(parsed.options.bounds, "0,0,200,200");
+  assert.equal(parsed.options.appVersion, "0.4.12");
+  assert.equal(parsed.options.horizontalAxis, "x");
+  assert.equal(parsed.options.verticalAxis, "z");
+});
+
+test("parseBoundsString accepts comma strings, objects, and rejects bad input", () => {
+  assert.deepEqual(parseBoundsString("0,0,200,200"), {
+    centerX: 0,
+    centerZ: 0,
+    sizeX: 200,
+    sizeZ: 200
+  });
+  assert.deepEqual(parseBoundsString("  -5.5 , 10 , 64 , 32 "), {
+    centerX: -5.5,
+    centerZ: 10,
+    sizeX: 64,
+    sizeZ: 32
+  });
+  assert.deepEqual(parseBoundsString({ centerX: 1, centerZ: 2, sizeX: 3, sizeZ: 4 }), {
+    centerX: 1,
+    centerZ: 2,
+    sizeX: 3,
+    sizeZ: 4
+  });
+  assert.deepEqual(parseBoundsString({ center_x: 1, center_z: 2, size_x: 3, size_z: 4 }), {
+    centerX: 1,
+    centerZ: 2,
+    sizeX: 3,
+    sizeZ: 4
+  });
+  assert.throws(() => parseBoundsString("0,0,200"), /four comma-separated/);
+  assert.throws(() => parseBoundsString("0,0,foo,200"), /finite number/);
+  assert.throws(() => parseBoundsString("0,0,0,200"), /sizeX must be greater/);
+  assert.throws(() => parseBoundsString("0,0,200,0"), /sizeZ must be greater/);
+});
+
+test("resolveMapPlan builds single map upload from flags", async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  await writeFile(path.join(cwd, "factory.png"), "png bytes");
+
+  const plan = await resolveMapPlan(
+    {
+      bounds: "0,0,200,200",
+      gameId: "42",
+      image: "factory.png",
+      levelId: "factory"
+    },
+    {
+      TESTING_FLOOR_API_TOKEN: "tf_test",
+      TESTING_FLOOR_VERSION: "0.4.12"
+    },
+    cwd
+  );
+
+  assert.equal(plan.apiUrl, "https://testingfloor.com");
+  assert.equal(plan.gameId, "42");
+  assert.equal(plan.token, "tf_test");
+  assert.equal(plan.maps.length, 1);
+  const [map] = plan.maps;
+  assert.equal(map.levelId, "factory");
+  assert.equal(map.imagePath, path.join(cwd, "factory.png"));
+  assert.equal(map.imageFilename, "factory.png");
+  assert.equal(map.imageMimeType, "image/png");
+  assert.deepEqual(map.bounds, { centerX: 0, centerZ: 0, sizeX: 200, sizeZ: 200 });
+  assert.equal(map.horizontalAxis, "x");
+  assert.equal(map.verticalAxis, "z");
+  assert.equal(map.appVersion, "0.4.12");
+});
+
+test("resolveMapPlan supports config maps relative to config file", async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  const configDir = path.join(cwd, "ci");
+  await mkdir(configDir, { recursive: true });
+  await writeFile(path.join(cwd, "factory.png"), "png bytes");
+  await writeFile(
+    path.join(configDir, "testingfloor-maps.json"),
+    JSON.stringify({
+      gameId: 42,
+      appVersion: "0.4.12",
+      maps: [
+        {
+          levelId: "factory",
+          image: "../factory.png",
+          bounds: { centerX: 0, centerZ: 0, sizeX: 200, sizeZ: 200 }
+        }
+      ]
+    })
+  );
+
+  const plan = await resolveMapPlan(
+    { config: path.join(configDir, "testingfloor-maps.json") },
+    { TESTING_FLOOR_API_TOKEN: "tf_test" },
+    cwd
+  );
+
+  assert.equal(plan.maps.length, 1);
+  assert.equal(plan.maps[0].imagePath, path.join(cwd, "factory.png"));
+  assert.equal(plan.maps[0].appVersion, "0.4.12");
+});
+
+test("resolveMapPlan rejects mismatched axes and missing fields", async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  await writeFile(path.join(cwd, "factory.png"), "png bytes");
+
+  await assert.rejects(
+    () =>
+      resolveMapPlan(
+        {
+          bounds: "0,0,200,200",
+          gameId: "42",
+          horizontalAxis: "x",
+          image: "factory.png",
+          levelId: "factory",
+          verticalAxis: "x"
+        },
+        { TESTING_FLOOR_API_TOKEN: "tf_test" },
+        cwd
+      ),
+    /axes must differ/
+  );
+
+  await assert.rejects(
+    () =>
+      resolveMapPlan(
+        { gameId: "42", levelId: "factory", image: "factory.png" },
+        { TESTING_FLOOR_API_TOKEN: "tf_test" },
+        cwd
+      ),
+    /Missing bounds/
+  );
+});
+
+test("uploadMap posts multipart form data and returns the created map", async (t) => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  const imagePath = path.join(cwd, "factory.png");
+  await writeFile(imagePath, "png-bytes");
+
+  let receivedBody = null;
+  let receivedAuth = null;
+  let receivedContentType = null;
+  const server = http.createServer(async (request, response) => {
+    if (request.method === "POST" && request.url === "/api/games/42/maps") {
+      receivedAuth = request.headers["authorization"];
+      receivedContentType = request.headers["content-type"];
+      receivedBody = await readRequestBody(request);
+      writeJson(response, 201, {
+        id: 11,
+        level_id: "factory",
+        version: 1,
+        pinned: true,
+        app_version: "0.4.12",
+        bounds: { center_x: 0, center_z: 0, size_x: 200, size_z: 200 },
+        map_horizontal_axis: "x",
+        map_vertical_axis: "z",
+        configured: true,
+        created: true
+      });
+      return;
+    }
+
+    response.writeHead(404);
+    response.end();
+  });
+  await listen(server);
+  t.after(() => server.close());
+
+  const result = await uploadMap(
+    { apiUrl: serverUrl(server), gameId: "42", token: "tf_test" },
+    {
+      levelId: "factory",
+      imagePath,
+      imageFilename: "factory.png",
+      imageMimeType: "image/png",
+      bounds: { centerX: 0, centerZ: 0, sizeX: 200, sizeZ: 200 },
+      horizontalAxis: "x",
+      verticalAxis: "z",
+      appVersion: "0.4.12"
+    },
+    { log: () => {} }
+  );
+
+  assert.equal(result.id, 11);
+  assert.equal(result.levelId, "factory");
+  assert.equal(result.version, 1);
+  assert.equal(result.pinned, true);
+  assert.equal(result.appVersion, "0.4.12");
+  assert.equal(result.created, true);
+  assert.equal(receivedAuth, "Bearer tf_test");
+  assert.match(receivedContentType ?? "", /^multipart\/form-data; boundary=/);
+  assert.match(receivedBody ?? "", /name="level_id"\r\n\r\nfactory\r\n/);
+  assert.match(receivedBody ?? "", /name="bounds\[center_x\]"\r\n\r\n0\r\n/);
+  assert.match(receivedBody ?? "", /name="bounds\[size_x\]"\r\n\r\n200\r\n/);
+  assert.match(receivedBody ?? "", /name="map_horizontal_axis"\r\n\r\nx\r\n/);
+  assert.match(receivedBody ?? "", /name="map_vertical_axis"\r\n\r\nz\r\n/);
+  assert.match(receivedBody ?? "", /name="app_version"\r\n\r\n0\.4\.12\r\n/);
+  assert.match(receivedBody ?? "", /name="image"; filename="factory\.png"\r\nContent-Type: image\/png\r\n\r\npng-bytes\r\n/);
+});
+
+test("readMapInputs assembles bounds from four scalar inputs", () => {
+  const inputs = readMapInputs({
+    "INPUT_API-TOKEN": "tf_test",
+    "INPUT_GAME-ID": "42",
+    "INPUT_LEVEL-ID": "factory",
+    INPUT_IMAGE: "factory.png",
+    "INPUT_BOUNDS-CENTER-X": "0",
+    "INPUT_BOUNDS-CENTER-Z": "0",
+    "INPUT_BOUNDS-SIZE-X": "200",
+    "INPUT_BOUNDS-SIZE-Z": "200"
+  });
+
+  assert.equal(inputs.token, "tf_test");
+  assert.equal(inputs.gameId, "42");
+  assert.equal(inputs.levelId, "factory");
+  assert.equal(inputs.image, "factory.png");
+  assert.deepEqual(inputs.bounds, { centerX: "0", centerZ: "0", sizeX: "200", sizeZ: "200" });
+});
+
+test("readMapInputs prefers single bounds string when provided", () => {
+  const inputs = readMapInputs({
+    "INPUT_API-TOKEN": "tf_test",
+    "INPUT_GAME-ID": "42",
+    "INPUT_LEVEL-ID": "factory",
+    INPUT_IMAGE: "factory.png",
+    INPUT_BOUNDS: "0,0,200,200"
+  });
+
+  assert.equal(inputs.bounds, "0,0,200,200");
 });
 
 function listen(server) {

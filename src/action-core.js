@@ -200,14 +200,14 @@ function defaultArchiveName({ env, inputs }) {
   return `build-${inputs.platform}-${version}.zip`;
 }
 
-function input(env, name) {
+export function input(env, name) {
   const actionName = `INPUT_${name.replaceAll(" ", "_").toUpperCase()}`;
   const shellName = `INPUT_${name.toUpperCase().replaceAll("-", "_")}`;
   const value = env[actionName] ?? env[shellName];
   return value === undefined || value === "" ? null : value;
 }
 
-function requiredInput(env, name) {
+export function requiredInput(env, name) {
   const value = input(env, name);
   if (!value) {
     throw new Error(`Missing required input: ${name}`);
@@ -216,7 +216,7 @@ function requiredInput(env, name) {
   return value;
 }
 
-function writeOutput(name, value, env) {
+export function writeOutput(name, value, env) {
   if (value === undefined || value === null) {
     return;
   }

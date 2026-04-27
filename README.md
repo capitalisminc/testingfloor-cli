@@ -1,8 +1,8 @@
 # Testing Floor CLI
 
-Small Node CLI for uploading ready-to-run game build archives to Testing Floor.
+Small Node CLI for uploading game artifacts to Testing Floor.
 
-This first version is intentionally boring: point it at one or more zip files, tell it the platform and launch path, and it uploads each build through Testing Floor's direct-upload API.
+It currently handles two artifact types: **builds** (ready-to-run game zips) and **maps** (top-down level images plus their world-space bounds, used to render heatmaps and event overlays).
 
 ## Install
 
@@ -114,6 +114,86 @@ You can also run the CLI directly:
 
 When `GITHUB_ACTIONS=true`, the CLI also includes basic GitHub metadata in `source_ref`.
 
+## Maps
+
+A "map" is a top-down image of a level plus its world-space bounds. Testing Floor uses it to render heatmaps and event overlays in the analytics workspace. Your editor tooling renders the PNG and reports the bounds; this CLI ships them to Testing Floor.
+
+The API token must include the `maps:sync` scope.
+
+### Single Map
+
+```sh
+export TESTING_FLOOR_API_TOKEN="tf_..."
+
+testingfloor upload-map \
+  --game-id 42 \
+  --level-id factory \
+  --image ./Builds/maps/factory.png \
+  --bounds 0,0,200,200 \
+  --app-version 0.4.12
+```
+
+`--bounds` is `center_x,center_z,size_x,size_z` in world units. `--app-version` is optional and pins the upload to a specific app version, so prior captures stay viewable when geometry changes between releases.
+
+### Multiple Maps
+
+Create `testingfloor-maps.json`:
+
+```json
+{
+  "gameId": 42,
+  "appVersion": "0.4.12",
+  "maps": [
+    {
+      "levelId": "factory",
+      "image": "./Builds/maps/factory.png",
+      "bounds": { "centerX": 0, "centerZ": 0, "sizeX": 200, "sizeZ": 200 }
+    },
+    {
+      "levelId": "warehouse",
+      "image": "./Builds/maps/warehouse.png",
+      "bounds": { "centerX": 50, "centerZ": -10, "sizeX": 128, "sizeZ": 128 }
+    }
+  ]
+}
+```
+
+Then:
+
+```sh
+testingfloor upload-map --config testingfloor-maps.json
+```
+
+Image paths in a config file are resolved relative to that config file.
+
+### GitHub Action
+
+```yaml
+- name: Upload map to Testing Floor
+  uses: capitalisminc/testingfloor-cli/upload-map@main
+  with:
+    api-token: ${{ secrets.TF_MAPS_TOKEN }}
+    game-id: ${{ vars.TF_GAME_ID }}
+    level-id: factory
+    image: build/maps/factory.png
+    bounds: "0,0,200,200"
+    app-version: ${{ github.ref_name }}
+```
+
+You can also pass bounds as four scalar inputs (`bounds-center-x`, `bounds-center-z`, `bounds-size-x`, `bounds-size-z`) if that's easier to wire up in your workflow.
+
+### Other engines
+
+Any engine that produces a top-down PNG can call the CLI as a subprocess. From a Unity editor script, for example:
+
+```csharp
+var psi = new ProcessStartInfo("testingfloor", $"upload-map --game-id 42 --level-id {level} --image \"{pngPath}\" --bounds {bounds} --app-version {Application.version}") {
+    UseShellExecute = false,
+};
+psi.EnvironmentVariables["TESTING_FLOOR_API_TOKEN"] = token;
+Process.Start(psi);
+```
+
 ## Config Fields
 
 Top-level:
@@ -134,6 +214,20 @@ Build object:
 - `workingDirectory`: optional extracted-archive working directory, defaults to `"."`.
 - `filename`: optional server-visible archive filename.
 - `archiveKind`: only `zip` is supported right now.
+
+Map config top-level:
+
+- `gameId`, `apiUrl`, `token`: same as builds.
+- `appVersion`: app version pinned to every map in the file. Per-map values override.
+- `maps`: array of map objects.
+
+Map object:
+
+- `levelId`: level identifier (must match the value the game emits in telemetry).
+- `image`: PNG, JPG, or WEBP path. Relative paths resolve from the config file's directory.
+- `bounds`: object with `centerX`, `centerZ`, `sizeX`, `sizeZ` — or a `"cx,cz,sx,sz"` string.
+- `horizontalAxis`, `verticalAxis`: world axes (`x`, `y`, `z`). Default to `x`/`z`. Must differ.
+- `appVersion`: optional override of the top-level `appVersion`.
 
 ## Environment
 

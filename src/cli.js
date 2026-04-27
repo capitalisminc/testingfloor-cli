@@ -8,20 +8,33 @@ import process from "node:process";
 
 const DEFAULT_API_URL = "https://testingfloor.com";
 const PLATFORMS = new Set(["windows", "macos", "linux"]);
+const AXES = new Set(["x", "y", "z"]);
+const IMAGE_MIME_TYPES = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp"
+};
 const ARRAY_OPTIONS = new Set(["launch-arg", "source-ref"]);
 const VALUE_OPTIONS = new Set([
   "api-url",
+  "app-version",
   "archive",
   "archive-kind",
+  "bounds",
   "config",
   "filename",
   "game-id",
   "git-sha",
+  "horizontal-axis",
+  "image",
   "launch-path",
+  "level-id",
   "platform",
   "source-ref-json",
   "token",
   "version",
+  "vertical-axis",
   "working-directory"
 ]);
 
@@ -33,27 +46,29 @@ export async function main(argv = process.argv.slice(2), env = process.env, cwd 
     return;
   }
 
-  if (!["upload-build", "upload"].includes(parsed.command)) {
-    throw new Error(`Unknown command "${parsed.command}". Run "testingfloor help".`);
-  }
-
-  const plan = await resolveUploadPlan(parsed.options, env, cwd);
-
-  if (parsed.options.json) {
+  if (["upload-build", "upload"].includes(parsed.command)) {
+    const plan = await resolveUploadPlan(parsed.options, env, cwd);
+    const log = parsed.options.json ? () => {} : console.error;
     const results = [];
     for (const build of plan.builds) {
-      results.push(await uploadBuild(plan, build, { log: () => {} }));
+      results.push(await uploadBuild(plan, build, { log }));
     }
     process.stdout.write(`${JSON.stringify({ builds: results }, null, 2)}\n`);
     return;
   }
 
-  const results = [];
-  for (const build of plan.builds) {
-    results.push(await uploadBuild(plan, build, { log: console.error }));
+  if (parsed.command === "upload-map") {
+    const plan = await resolveMapPlan(parsed.options, env, cwd);
+    const log = parsed.options.json ? () => {} : console.error;
+    const results = [];
+    for (const map of plan.maps) {
+      results.push(await uploadMap(plan, map, { log }));
+    }
+    process.stdout.write(`${JSON.stringify({ maps: results }, null, 2)}\n`);
+    return;
   }
 
-  process.stdout.write(`${JSON.stringify({ builds: results }, null, 2)}\n`);
+  throw new Error(`Unknown command "${parsed.command}". Run "testingfloor help".`);
 }
 
 export function parseArgs(argv) {
@@ -149,6 +164,211 @@ export async function resolveUploadPlan(options, env = {}, cwd = process.cwd()) 
     gameId: String(gameId),
     builds
   };
+}
+
+export async function resolveMapPlan(options, env = {}, cwd = process.cwd()) {
+  const configPath = options.config ? path.resolve(cwd, options.config) : null;
+  const config = configPath ? await readJson(configPath) : {};
+  const configDir = configPath ? path.dirname(configPath) : cwd;
+
+  const cliMapRequested = Boolean(options.levelId || options.image || options.bounds);
+  const configuredMaps = Array.isArray(config.maps) ? config.maps : [];
+  if (cliMapRequested && configuredMaps.length > 0) {
+    throw new Error("Use either --config maps or --level-id/--image flags, not both.");
+  }
+
+  const apiUrl = normalizeApiUrl(
+    firstPresent(options.apiUrl, env.TESTING_FLOOR_API_URL, config.apiUrl, DEFAULT_API_URL)
+  );
+  const token = firstPresent(options.token, env.TESTING_FLOOR_API_TOKEN, config.token);
+  const gameId = firstPresent(options.gameId, env.TESTING_FLOOR_GAME_ID, config.gameId);
+  const appVersion = firstPresent(
+    options.appVersion,
+    env.TESTING_FLOOR_VERSION,
+    config.appVersion,
+    config.version
+  );
+
+  const rawMaps = cliMapRequested ? [mapFromOptions(options)] : configuredMaps;
+  const maps = rawMaps.map((map) =>
+    normalizeMap(map, { configDir, cwd, commonAppVersion: appVersion })
+  );
+
+  validateMapPlan({ apiUrl, token, gameId, maps });
+
+  return {
+    apiUrl,
+    token,
+    gameId: String(gameId),
+    maps
+  };
+}
+
+export function parseBoundsString(raw) {
+  if (raw === undefined || raw === null || raw === "") {
+    return null;
+  }
+
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    const centerX = numericValue(raw.centerX ?? raw.center_x, "bounds.centerX");
+    const centerZ = numericValue(raw.centerZ ?? raw.center_z, "bounds.centerZ");
+    const sizeX = numericValue(raw.sizeX ?? raw.size_x, "bounds.sizeX");
+    const sizeZ = numericValue(raw.sizeZ ?? raw.size_z, "bounds.sizeZ");
+    return validateBounds({ centerX, centerZ, sizeX, sizeZ });
+  }
+
+  if (typeof raw !== "string") {
+    throw new Error("bounds must be a string \"cx,cz,sx,sz\" or an object.");
+  }
+
+  const parts = raw.split(",").map((piece) => piece.trim());
+  if (parts.length !== 4) {
+    throw new Error("bounds must be four comma-separated numbers: center_x,center_z,size_x,size_z.");
+  }
+
+  const [centerX, centerZ, sizeX, sizeZ] = parts.map((piece, index) =>
+    numericValue(piece, ["bounds.centerX", "bounds.centerZ", "bounds.sizeX", "bounds.sizeZ"][index])
+  );
+
+  return validateBounds({ centerX, centerZ, sizeX, sizeZ });
+}
+
+export async function uploadMap(plan, map, { log = console.error } = {}) {
+  log(`Uploading map ${map.levelId} from ${map.imagePath}`);
+
+  const formData = new FormData();
+  formData.append("level_id", map.levelId);
+  formData.append("bounds[center_x]", String(map.bounds.centerX));
+  formData.append("bounds[center_z]", String(map.bounds.centerZ));
+  formData.append("bounds[size_x]", String(map.bounds.sizeX));
+  formData.append("bounds[size_z]", String(map.bounds.sizeZ));
+  formData.append("map_horizontal_axis", map.horizontalAxis);
+  formData.append("map_vertical_axis", map.verticalAxis);
+  if (map.appVersion) {
+    formData.append("app_version", map.appVersion);
+  }
+
+  const imageBytes = await readFile(map.imagePath);
+  const imageBlob = new Blob([imageBytes], { type: map.imageMimeType });
+  formData.append("image", imageBlob, map.imageFilename);
+
+  const response = await postFormData(`${plan.apiUrl}/api/games/${plan.gameId}/maps`, plan.token, formData);
+
+  return {
+    id: response.id,
+    levelId: response.level_id ?? map.levelId,
+    version: response.version ?? null,
+    pinned: response.pinned ?? null,
+    appVersion: response.app_version ?? map.appVersion ?? null,
+    bounds: response.bounds ?? null,
+    horizontalAxis: response.map_horizontal_axis ?? map.horizontalAxis,
+    verticalAxis: response.map_vertical_axis ?? map.verticalAxis,
+    configured: response.configured ?? null,
+    created: response.created ?? null
+  };
+}
+
+function mapFromOptions(options) {
+  return {
+    levelId: options.levelId,
+    image: options.image,
+    bounds: options.bounds,
+    horizontalAxis: options.horizontalAxis,
+    verticalAxis: options.verticalAxis,
+    appVersion: options.appVersion
+  };
+}
+
+function normalizeMap(map, { configDir, cwd, commonAppVersion }) {
+  const image = map.image ?? map.path;
+  const imagePath = image ? resolveBuildPath(image, map.fromConfig === false ? cwd : configDir) : null;
+  const bounds = parseBoundsString(map.bounds);
+  const imageFilename = imagePath ? path.basename(imagePath) : null;
+  const imageMimeType = imageFilename ? mimeTypeForImage(imageFilename) : null;
+
+  return {
+    levelId: typeof map.levelId === "string" ? map.levelId.trim() : map.levelId ?? map.level_id ?? null,
+    imagePath,
+    imageFilename,
+    imageMimeType,
+    bounds,
+    horizontalAxis: (map.horizontalAxis ?? map.map_horizontal_axis ?? "x").toLowerCase(),
+    verticalAxis: (map.verticalAxis ?? map.map_vertical_axis ?? "z").toLowerCase(),
+    appVersion: map.appVersion ?? map.app_version ?? commonAppVersion ?? null
+  };
+}
+
+function validateMapPlan(plan) {
+  if (!plan.token) {
+    throw new Error("Missing API token. Set TESTING_FLOOR_API_TOKEN or pass --token.");
+  }
+
+  if (!plan.gameId || !/^\d+$/.test(String(plan.gameId))) {
+    throw new Error("Missing numeric game id. Set gameId in config or pass --game-id.");
+  }
+
+  if (plan.maps.length === 0) {
+    throw new Error("No maps configured. Pass --level-id/--image/--bounds or provide config maps.");
+  }
+
+  for (const map of plan.maps) {
+    if (!map.levelId) {
+      throw new Error("Missing levelId for map.");
+    }
+
+    if (!map.imagePath) {
+      throw new Error(`Missing image path for map ${map.levelId}.`);
+    }
+
+    if (!map.imageMimeType) {
+      throw new Error(`Unsupported image type for ${map.imageFilename}. Use .png, .jpg, .jpeg, or .webp.`);
+    }
+
+    if (!map.bounds) {
+      throw new Error(`Missing bounds for map ${map.levelId}.`);
+    }
+
+    if (!AXES.has(map.horizontalAxis)) {
+      throw new Error(`Invalid horizontal axis "${map.horizontalAxis}". Expected x, y, or z.`);
+    }
+
+    if (!AXES.has(map.verticalAxis)) {
+      throw new Error(`Invalid vertical axis "${map.verticalAxis}". Expected x, y, or z.`);
+    }
+
+    if (map.horizontalAxis === map.verticalAxis) {
+      throw new Error(`Horizontal and vertical axes must differ (got "${map.horizontalAxis}").`);
+    }
+  }
+}
+
+function validateBounds({ centerX, centerZ, sizeX, sizeZ }) {
+  if (!(sizeX > 0)) {
+    throw new Error("bounds.sizeX must be greater than zero.");
+  }
+
+  if (!(sizeZ > 0)) {
+    throw new Error("bounds.sizeZ must be greater than zero.");
+  }
+
+  return { centerX, centerZ, sizeX, sizeZ };
+}
+
+function numericValue(value, name) {
+  if (value === undefined || value === null || value === "") {
+    throw new Error(`${name} is required.`);
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`${name} must be a finite number, got "${value}".`);
+  }
+
+  return parsed;
+}
+
+function mimeTypeForImage(filename) {
+  return IMAGE_MIME_TYPES[path.extname(filename).toLowerCase()] ?? null;
 }
 
 export function normalizeConfiguredBuilds(config) {
@@ -390,6 +610,22 @@ async function postJson(url, token, body) {
   return parsed;
 }
 
+async function postFormData(url, token, formData) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${token}` },
+    body: formData
+  });
+
+  const text = await response.text();
+  const parsed = text ? parseJsonResponse(text, url) : {};
+  if (!response.ok) {
+    throw new Error(parsed.error || `${response.status} ${response.statusText} from ${url}`);
+  }
+
+  return parsed;
+}
+
 async function uploadMultipartFile(multipartUpload, filePath, size, { log = console.error } = {}) {
   const uploadId = multipartUpload.upload_id ?? multipartUpload.uploadId;
   const partSize = Number(multipartUpload.part_size ?? multipartUpload.partSize);
@@ -581,18 +817,17 @@ function helpText() {
 Usage:
   testingfloor upload-build --game-id 42 --platform windows --archive ./game-windows.zip --version 0.4.12 --launch-path Game.exe
   testingfloor upload-build --config testingfloor-builds.json
+  testingfloor upload-map --game-id 42 --level-id factory --image ./maps/factory.png --bounds 0,0,200,200
+  testingfloor upload-map --config testingfloor-maps.json
 
 Environment:
-  TESTING_FLOOR_API_TOKEN   API key with builds:create scope
+  TESTING_FLOOR_API_TOKEN   API key (builds:create or maps:sync scope)
   TESTING_FLOOR_API_URL     Defaults to ${DEFAULT_API_URL}
   TESTING_FLOOR_GAME_ID     Numeric game id
-  TESTING_FLOOR_VERSION     Build version metadata
-  TESTING_FLOOR_GIT_SHA     Git SHA metadata
+  TESTING_FLOOR_VERSION     Build version / map app_version metadata
+  TESTING_FLOOR_GIT_SHA     Git SHA metadata (builds)
 
-Options:
-  --api-url <url>           Testing Floor base URL
-  --token <token>           API token
-  --game-id <id>            Numeric Testing Floor game id
+Build options:
   --platform <platform>     windows, macos, or linux
   --archive <path>          Zip file to upload
   --version <version>       Version metadata
@@ -602,7 +837,20 @@ Options:
   --working-directory <dir> Working directory inside the extracted archive, defaults to "."
   --source-ref <key=value>  Source metadata, repeatable
   --source-ref-json <json>  Source metadata object
-  --config, -c <path>       JSON config with builds or platforms
+
+Map options:
+  --level-id <id>           Level identifier the map belongs to
+  --image <path>            PNG/JPG/WEBP image to upload
+  --bounds <cx,cz,sx,sz>    World-space bounds: center_x,center_z,size_x,size_z
+  --horizontal-axis <axis>  Horizontal world axis (x|y|z), defaults to x
+  --vertical-axis <axis>    Vertical world axis (x|y|z), defaults to z
+  --app-version <version>   App version associated with this map snapshot
+
+Common options:
+  --api-url <url>           Testing Floor base URL
+  --token <token>           API token
+  --game-id <id>            Numeric Testing Floor game id
+  --config, -c <path>       JSON config with builds, platforms, or maps
   --json                    Print only JSON results
 `;
 }
