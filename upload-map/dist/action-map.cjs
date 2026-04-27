@@ -27,22 +27,22 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 // ../../../node_modules/normalize-path/index.js
 var require_normalize_path = __commonJS({
   "../../../node_modules/normalize-path/index.js"(exports2, module2) {
-    module2.exports = function(path3, stripTrailing) {
-      if (typeof path3 !== "string") {
+    module2.exports = function(path2, stripTrailing) {
+      if (typeof path2 !== "string") {
         throw new TypeError("expected path to be a string");
       }
-      if (path3 === "\\" || path3 === "/") return "/";
-      var len = path3.length;
-      if (len <= 1) return path3;
+      if (path2 === "\\" || path2 === "/") return "/";
+      var len = path2.length;
+      if (len <= 1) return path2;
       var prefix = "";
-      if (len > 4 && path3[3] === "\\") {
-        var ch = path3[2];
-        if ((ch === "?" || ch === ".") && path3.slice(0, 2) === "\\\\") {
-          path3 = path3.slice(2);
+      if (len > 4 && path2[3] === "\\") {
+        var ch = path2[2];
+        if ((ch === "?" || ch === ".") && path2.slice(0, 2) === "\\\\") {
+          path2 = path2.slice(2);
           prefix = "//";
         }
       }
-      var segs = path3.split(/[/\\]+/);
+      var segs = path2.split(/[/\\]+/);
       if (stripTrailing !== false && segs[segs.length - 1] === "") {
         segs.pop();
       }
@@ -1832,7 +1832,7 @@ var require_utils = __commonJS({
 var require_end_of_stream = __commonJS({
   "../../../node_modules/readable-stream/lib/internal/streams/end-of-stream.js"(exports2, module2) {
     "use strict";
-    var process4 = require_process();
+    var process5 = require_process();
     var { AbortError, codes } = require_errors();
     var { ERR_INVALID_ARG_TYPE, ERR_STREAM_PREMATURE_CLOSE } = codes;
     var { kEmptyObject, once } = require_util();
@@ -1968,17 +1968,17 @@ var require_end_of_stream = __commonJS({
       }
       stream.on("close", onclose);
       if (closed) {
-        process4.nextTick(onclose);
+        process5.nextTick(onclose);
       } else if (wState !== null && wState !== void 0 && wState.errorEmitted || rState !== null && rState !== void 0 && rState.errorEmitted) {
         if (!willEmitClose) {
-          process4.nextTick(onclosed);
+          process5.nextTick(onclosed);
         }
       } else if (!readable && (!willEmitClose || isReadable(stream)) && (writableFinished || isWritable(stream) === false)) {
-        process4.nextTick(onclosed);
+        process5.nextTick(onclosed);
       } else if (!writable && (!willEmitClose || isWritable(stream)) && (readableFinished || isReadable(stream) === false)) {
-        process4.nextTick(onclosed);
+        process5.nextTick(onclosed);
       } else if (rState && stream.req && stream.aborted) {
-        process4.nextTick(onclosed);
+        process5.nextTick(onclosed);
       }
       const cleanup = () => {
         callback = nop;
@@ -2006,7 +2006,7 @@ var require_end_of_stream = __commonJS({
           );
         };
         if (options.signal.aborted) {
-          process4.nextTick(abort);
+          process5.nextTick(abort);
         } else {
           addAbortListener = addAbortListener || require_util().addAbortListener;
           const disposable = addAbortListener(options.signal, abort);
@@ -2033,7 +2033,7 @@ var require_end_of_stream = __commonJS({
           );
         };
         if (options.signal.aborted) {
-          process4.nextTick(abort);
+          process5.nextTick(abort);
         } else {
           addAbortListener = addAbortListener || require_util().addAbortListener;
           const disposable = addAbortListener(options.signal, abort);
@@ -2046,13 +2046,13 @@ var require_end_of_stream = __commonJS({
       }
       const resolverFn = (...args) => {
         if (!isAborted) {
-          process4.nextTick(() => callback.apply(stream, args));
+          process5.nextTick(() => callback.apply(stream, args));
         }
       };
       PromisePrototypeThen(stream[kIsClosedPromise].promise, resolverFn, resolverFn);
       return nop;
     }
-    function finished2(stream, opts) {
+    function finished(stream, opts) {
       var _opts;
       let autoCleanup = false;
       if (opts === null) {
@@ -2076,7 +2076,7 @@ var require_end_of_stream = __commonJS({
       });
     }
     module2.exports = eos;
-    module2.exports.finished = finished2;
+    module2.exports.finished = finished;
   }
 });
 
@@ -2084,7 +2084,7 @@ var require_end_of_stream = __commonJS({
 var require_destroy = __commonJS({
   "../../../node_modules/readable-stream/lib/internal/streams/destroy.js"(exports2, module2) {
     "use strict";
-    var process4 = require_process();
+    var process5 = require_process();
     var {
       aggregateTwoErrors,
       codes: { ERR_MULTIPLE_CALLBACK },
@@ -2151,9 +2151,9 @@ var require_destroy = __commonJS({
           cb(err2);
         }
         if (err2) {
-          process4.nextTick(emitErrorCloseNT, self, err2);
+          process5.nextTick(emitErrorCloseNT, self, err2);
         } else {
-          process4.nextTick(emitCloseNT, self);
+          process5.nextTick(emitCloseNT, self);
         }
       }
       try {
@@ -2238,7 +2238,7 @@ var require_destroy = __commonJS({
           r.errored = err;
         }
         if (sync) {
-          process4.nextTick(emitErrorNT, stream, err);
+          process5.nextTick(emitErrorNT, stream, err);
         } else {
           emitErrorNT(stream, err);
         }
@@ -2260,7 +2260,7 @@ var require_destroy = __commonJS({
       if (stream.listenerCount(kConstruct) > 1) {
         return;
       }
-      process4.nextTick(constructNT, stream);
+      process5.nextTick(constructNT, stream);
     }
     function constructNT(stream) {
       let called = false;
@@ -2284,15 +2284,15 @@ var require_destroy = __commonJS({
         } else if (err) {
           errorOrDestroy(stream, err, true);
         } else {
-          process4.nextTick(emitConstructNT, stream);
+          process5.nextTick(emitConstructNT, stream);
         }
       }
       try {
         stream._construct((err) => {
-          process4.nextTick(onConstruct, err);
+          process5.nextTick(onConstruct, err);
         });
       } catch (err) {
-        process4.nextTick(onConstruct, err);
+        process5.nextTick(onConstruct, err);
       }
     }
     function emitConstructNT(stream) {
@@ -2306,7 +2306,7 @@ var require_destroy = __commonJS({
     }
     function emitErrorCloseLegacy(stream, err) {
       stream.emit("error", err);
-      process4.nextTick(emitCloseLegacy, stream);
+      process5.nextTick(emitCloseLegacy, stream);
     }
     function destroyer(stream, err) {
       if (!stream || isDestroyed(stream)) {
@@ -2327,9 +2327,9 @@ var require_destroy = __commonJS({
       } else if (typeof stream.close === "function") {
         stream.close();
       } else if (err) {
-        process4.nextTick(emitErrorCloseLegacy, stream, err);
+        process5.nextTick(emitErrorCloseLegacy, stream, err);
       } else {
-        process4.nextTick(emitCloseLegacy, stream);
+        process5.nextTick(emitCloseLegacy, stream);
       }
       if (!stream.destroyed) {
         stream[kIsDestroyed] = true;
@@ -2971,7 +2971,7 @@ var require_string_decoder = __commonJS({
 var require_from = __commonJS({
   "../../../node_modules/readable-stream/lib/internal/streams/from.js"(exports2, module2) {
     "use strict";
-    var process4 = require_process();
+    var process5 = require_process();
     var { PromisePrototypeThen, SymbolAsyncIterator, SymbolIterator } = require_primordials();
     var { Buffer: Buffer2 } = require("buffer");
     var { ERR_INVALID_ARG_TYPE, ERR_STREAM_NULL_VALUES } = require_errors().codes;
@@ -3013,9 +3013,9 @@ var require_from = __commonJS({
       readable._destroy = function(error, cb) {
         PromisePrototypeThen(
           close(error),
-          () => process4.nextTick(cb, error),
+          () => process5.nextTick(cb, error),
           // nextTick is here in case cb throws
-          (e) => process4.nextTick(cb, e || error)
+          (e) => process5.nextTick(cb, e || error)
         );
       };
       async function close(error) {
@@ -3066,7 +3066,7 @@ var require_from = __commonJS({
 var require_readable = __commonJS({
   "../../../node_modules/readable-stream/lib/internal/streams/readable.js"(exports2, module2) {
     "use strict";
-    var process4 = require_process();
+    var process5 = require_process();
     var {
       ArrayPrototypeIndexOf,
       NumberIsInteger,
@@ -3451,7 +3451,7 @@ var require_readable = __commonJS({
       if (!state.emittedReadable) {
         debug("emitReadable", state.flowing);
         state.emittedReadable = true;
-        process4.nextTick(emitReadable_, stream);
+        process5.nextTick(emitReadable_, stream);
       }
     }
     function emitReadable_(stream) {
@@ -3467,7 +3467,7 @@ var require_readable = __commonJS({
     function maybeReadMore(stream, state) {
       if (!state.readingMore && state.constructed) {
         state.readingMore = true;
-        process4.nextTick(maybeReadMore_, stream, state);
+        process5.nextTick(maybeReadMore_, stream, state);
       }
     }
     function maybeReadMore_(stream, state) {
@@ -3494,9 +3494,9 @@ var require_readable = __commonJS({
       }
       state.pipes.push(dest);
       debug("pipe count=%d opts=%j", state.pipes.length, pipeOpts);
-      const doEnd = (!pipeOpts || pipeOpts.end !== false) && dest !== process4.stdout && dest !== process4.stderr;
+      const doEnd = (!pipeOpts || pipeOpts.end !== false) && dest !== process5.stdout && dest !== process5.stderr;
       const endFn = doEnd ? onend : unpipe;
-      if (state.endEmitted) process4.nextTick(endFn);
+      if (state.endEmitted) process5.nextTick(endFn);
       else src.once("end", endFn);
       dest.on("unpipe", onunpipe);
       function onunpipe(readable, unpipeInfo) {
@@ -3646,7 +3646,7 @@ var require_readable = __commonJS({
           if (state.length) {
             emitReadable(this);
           } else if (!state.reading) {
-            process4.nextTick(nReadingNextTick, this);
+            process5.nextTick(nReadingNextTick, this);
           }
         }
       }
@@ -3656,7 +3656,7 @@ var require_readable = __commonJS({
     Readable.prototype.removeListener = function(ev, fn) {
       const res = Stream.prototype.removeListener.call(this, ev, fn);
       if (ev === "readable") {
-        process4.nextTick(updateReadableListening, this);
+        process5.nextTick(updateReadableListening, this);
       }
       return res;
     };
@@ -3664,7 +3664,7 @@ var require_readable = __commonJS({
     Readable.prototype.removeAllListeners = function(ev) {
       const res = Stream.prototype.removeAllListeners.apply(this, arguments);
       if (ev === "readable" || ev === void 0) {
-        process4.nextTick(updateReadableListening, this);
+        process5.nextTick(updateReadableListening, this);
       }
       return res;
     };
@@ -3696,7 +3696,7 @@ var require_readable = __commonJS({
     function resume(stream, state) {
       if (!state.resumeScheduled) {
         state.resumeScheduled = true;
-        process4.nextTick(resume_, stream, state);
+        process5.nextTick(resume_, stream, state);
       }
     }
     function resume_(stream, state) {
@@ -3973,7 +3973,7 @@ var require_readable = __commonJS({
       debug("endReadable", state.endEmitted);
       if (!state.endEmitted) {
         state.ended = true;
-        process4.nextTick(endReadableNT, state, stream);
+        process5.nextTick(endReadableNT, state, stream);
       }
     }
     function endReadableNT(state, stream) {
@@ -3982,7 +3982,7 @@ var require_readable = __commonJS({
         state.endEmitted = true;
         stream.emit("end");
         if (stream.writable && stream.allowHalfOpen === false) {
-          process4.nextTick(endWritableNT, stream);
+          process5.nextTick(endWritableNT, stream);
         } else if (state.autoDestroy) {
           const wState = stream._writableState;
           const autoDestroy = !wState || wState.autoDestroy && // We don't expect the writable to ever 'finish'
@@ -4032,7 +4032,7 @@ var require_readable = __commonJS({
 var require_writable = __commonJS({
   "../../../node_modules/readable-stream/lib/internal/streams/writable.js"(exports2, module2) {
     "use strict";
-    var process4 = require_process();
+    var process5 = require_process();
     var {
       ArrayPrototypeSlice,
       Error: Error2,
@@ -4185,7 +4185,7 @@ var require_writable = __commonJS({
         err = new ERR_STREAM_DESTROYED("write");
       }
       if (err) {
-        process4.nextTick(cb, err);
+        process5.nextTick(cb, err);
         errorOrDestroy(stream, err, true);
         return err;
       }
@@ -4275,7 +4275,7 @@ var require_writable = __commonJS({
           stream._readableState.errored = er;
         }
         if (sync) {
-          process4.nextTick(onwriteError, stream, state, er, cb);
+          process5.nextTick(onwriteError, stream, state, er, cb);
         } else {
           onwriteError(stream, state, er, cb);
         }
@@ -4293,7 +4293,7 @@ var require_writable = __commonJS({
               stream,
               state
             };
-            process4.nextTick(afterWriteTick, state.afterWriteTickInfo);
+            process5.nextTick(afterWriteTick, state.afterWriteTickInfo);
           }
         } else {
           afterWrite(stream, state, 1, cb);
@@ -4430,7 +4430,7 @@ var require_writable = __commonJS({
       }
       if (typeof cb === "function") {
         if (err || state.finished) {
-          process4.nextTick(cb, err);
+          process5.nextTick(cb, err);
         } else {
           state[kOnFinished].push(cb);
         }
@@ -4459,7 +4459,7 @@ var require_writable = __commonJS({
           state.prefinished = true;
           stream.emit("prefinish");
           state.pendingcb++;
-          process4.nextTick(finish, stream, state);
+          process5.nextTick(finish, stream, state);
         }
       }
       state.sync = true;
@@ -4488,7 +4488,7 @@ var require_writable = __commonJS({
         if (state.pendingcb === 0) {
           if (sync) {
             state.pendingcb++;
-            process4.nextTick(
+            process5.nextTick(
               (stream2, state2) => {
                 if (needFinish(state2)) {
                   finish(stream2, state2);
@@ -4623,7 +4623,7 @@ var require_writable = __commonJS({
     Writable.prototype.destroy = function(err, cb) {
       const state = this._writableState;
       if (!state.destroyed && (state.bufferedIndex < state.buffered.length || state[kOnFinished].length)) {
-        process4.nextTick(errorBuffer, state);
+        process5.nextTick(errorBuffer, state);
       }
       destroy.call(this, err, cb);
       return this;
@@ -4652,7 +4652,7 @@ var require_writable = __commonJS({
 // ../../../node_modules/readable-stream/lib/internal/streams/duplexify.js
 var require_duplexify = __commonJS({
   "../../../node_modules/readable-stream/lib/internal/streams/duplexify.js"(exports2, module2) {
-    var process4 = require_process();
+    var process5 = require_process();
     var bufferModule = require("buffer");
     var {
       isReadable,
@@ -4765,9 +4765,9 @@ var require_duplexify = __commonJS({
               final(async () => {
                 try {
                   await promise;
-                  process4.nextTick(cb, null);
+                  process5.nextTick(cb, null);
                 } catch (err) {
-                  process4.nextTick(cb, err);
+                  process5.nextTick(cb, err);
                 }
               });
             },
@@ -4846,7 +4846,7 @@ var require_duplexify = __commonJS({
             const _promise = promise;
             promise = null;
             const { chunk, done, cb } = await _promise;
-            process4.nextTick(cb);
+            process5.nextTick(cb);
             if (done) return;
             if (signal.aborted)
               throw new AbortError(void 0, {
@@ -5237,7 +5237,7 @@ var require_passthrough = __commonJS({
 // ../../../node_modules/readable-stream/lib/internal/streams/pipeline.js
 var require_pipeline = __commonJS({
   "../../../node_modules/readable-stream/lib/internal/streams/pipeline.js"(exports2, module2) {
-    var process4 = require_process();
+    var process5 = require_process();
     var { ArrayIsArray, Promise: Promise2, SymbolAsyncIterator, SymbolDispose } = require_primordials();
     var eos = require_end_of_stream();
     var { once } = require_util();
@@ -5270,9 +5270,9 @@ var require_pipeline = __commonJS({
     var Readable;
     var addAbortListener;
     function destroyer(stream, reading, writing) {
-      let finished2 = false;
+      let finished = false;
       stream.on("close", () => {
-        finished2 = true;
+        finished = true;
       });
       const cleanup = eos(
         stream,
@@ -5281,13 +5281,13 @@ var require_pipeline = __commonJS({
           writable: writing
         },
         (err) => {
-          finished2 = !err;
+          finished = !err;
         }
       );
       return {
         destroy: (err) => {
-          if (finished2) return;
-          finished2 = true;
+          if (finished) return;
+          finished = true;
           destroyImpl.destroyer(stream, err || new ERR_STREAM_DESTROYED("pipe"));
         },
         cleanup
@@ -5439,7 +5439,7 @@ var require_pipeline = __commonJS({
           if (!error) {
             lastStreamCleanup.forEach((fn) => fn());
           }
-          process4.nextTick(callback, error, value);
+          process5.nextTick(callback, error, value);
         }
       }
       let ret;
@@ -5518,11 +5518,11 @@ var require_pipeline = __commonJS({
                   if (end) {
                     pt.end();
                   }
-                  process4.nextTick(finish);
+                  process5.nextTick(finish);
                 },
                 (err) => {
                   pt.destroy(err);
-                  process4.nextTick(finish, err);
+                  process5.nextTick(finish, err);
                 }
               );
             } else if (isIterable(ret, true)) {
@@ -5603,7 +5603,7 @@ var require_pipeline = __commonJS({
         }
       }
       if (signal !== null && signal !== void 0 && signal.aborted || outerSignal !== null && outerSignal !== void 0 && outerSignal.aborted) {
-        process4.nextTick(abort);
+        process5.nextTick(abort);
       }
       return ret;
     }
@@ -5624,7 +5624,7 @@ var require_pipeline = __commonJS({
         };
         var endFn = endFn2;
         if (isReadableFinished(src)) {
-          process4.nextTick(endFn2);
+          process5.nextTick(endFn2);
         } else {
           src.once("end", endFn2);
         }
@@ -5867,7 +5867,7 @@ var require_operators = __commonJS({
     var { validateAbortSignal, validateInteger, validateObject } = require_validators();
     var kWeakHandler = require_primordials().Symbol("kWeak");
     var kResistStopPropagation = require_primordials().Symbol("kResistStopPropagation");
-    var { finished: finished2 } = require_end_of_stream();
+    var { finished } = require_end_of_stream();
     var staticCompose = require_compose();
     var { addAbortSignalNoValidate } = require_add_abort_signal();
     var { isWritable, isNodeStream } = require_utils();
@@ -6114,7 +6114,7 @@ var require_operators = __commonJS({
         });
         this.once("error", () => {
         });
-        await finished2(this.destroy(err));
+        await finished(this.destroy(err));
         throw err;
       }
       const ac = new AbortController();
@@ -6267,7 +6267,7 @@ var require_promises = __commonJS({
     var { ArrayPrototypePop, Promise: Promise2 } = require_primordials();
     var { isIterable, isNodeStream, isWebStream } = require_utils();
     var { pipelineImpl: pl } = require_pipeline();
-    var { finished: finished2 } = require_end_of_stream();
+    var { finished } = require_end_of_stream();
     require_stream();
     function pipeline(...streams) {
       return new Promise2((resolve, reject) => {
@@ -6296,7 +6296,7 @@ var require_promises = __commonJS({
       });
     }
     module2.exports = {
-      finished: finished2,
+      finished,
       pipeline
     };
   }
@@ -6583,77 +6583,15 @@ var require_crc32 = __commonJS({
   }
 });
 
-// src/action-core.js
-var import_node_fs2 = require("node:fs");
-var import_promises2 = require("node:fs/promises");
-var import_node_os = __toESM(require("node:os"), 1);
-var import_node_path2 = __toESM(require("node:path"), 1);
-var import_node_process2 = __toESM(require("node:process"), 1);
-var import_promises3 = require("node:stream/promises");
+// src/action-map.js
+var import_node_process3 = __toESM(require("node:process"), 1);
 
-// ../../../node_modules/compress-commons/lib/archivers/archive-entry.js
-var ArchiveEntry = class {
-  getName() {
-  }
-  getSize() {
-  }
-  getLastModifiedDate() {
-  }
-  isDirectory() {
-  }
-};
+// src/action-core.js
+var import_node_fs = require("node:fs");
+var import_node_process2 = __toESM(require("node:process"), 1);
 
 // ../../../node_modules/compress-commons/lib/archivers/zip/zip-archive-entry.js
 var import_normalize_path = __toESM(require_normalize_path(), 1);
-
-// ../../../node_modules/compress-commons/lib/archivers/zip/util.js
-function dateToDos(d, forceLocalTime) {
-  forceLocalTime = forceLocalTime || false;
-  var year = forceLocalTime ? d.getFullYear() : d.getUTCFullYear();
-  if (year < 1980) {
-    return 2162688;
-  } else if (year >= 2044) {
-    return 2141175677;
-  }
-  var val = {
-    year,
-    month: forceLocalTime ? d.getMonth() : d.getUTCMonth(),
-    date: forceLocalTime ? d.getDate() : d.getUTCDate(),
-    hours: forceLocalTime ? d.getHours() : d.getUTCHours(),
-    minutes: forceLocalTime ? d.getMinutes() : d.getUTCMinutes(),
-    seconds: forceLocalTime ? d.getSeconds() : d.getUTCSeconds()
-  };
-  return val.year - 1980 << 25 | val.month + 1 << 21 | val.date << 16 | val.hours << 11 | val.minutes << 5 | val.seconds / 2;
-}
-function dosToDate(dos) {
-  return new Date(
-    (dos >> 25 & 127) + 1980,
-    (dos >> 21 & 15) - 1,
-    dos >> 16 & 31,
-    dos >> 11 & 31,
-    dos >> 5 & 63,
-    (dos & 31) << 1
-  );
-}
-function getEightBytes(v) {
-  var buf = Buffer.alloc(8);
-  buf.writeUInt32LE(v % 4294967296, 0);
-  buf.writeUInt32LE(v / 4294967296 | 0, 4);
-  return buf;
-}
-function getShortBytes(v) {
-  var buf = Buffer.alloc(2);
-  buf.writeUInt16LE((v & 65535) >>> 0, 0);
-  return buf;
-}
-function getShortBytesValue(buf, offset) {
-  return buf.readUInt16LE(offset);
-}
-function getLongBytes(v) {
-  var buf = Buffer.alloc(4);
-  buf.writeUInt32LE((v & 4294967295) >>> 0, 0);
-  return buf;
-}
 
 // ../../../node_modules/compress-commons/lib/archivers/zip/general-purpose-bit.js
 var DATA_DESCRIPTOR_FLAG = 1 << 3;
@@ -6662,566 +6600,17 @@ var NUMBER_OF_SHANNON_FANO_TREES_FLAG = 1 << 2;
 var SLIDING_DICTIONARY_SIZE_FLAG = 1 << 1;
 var STRONG_ENCRYPTION_FLAG = 1 << 6;
 var UFT8_NAMES_FLAG = 1 << 11;
-var GeneralPurposeBit = class _GeneralPurposeBit {
-  constructor() {
-    this.descriptor = false;
-    this.encryption = false;
-    this.utf8 = false;
-    this.numberOfShannonFanoTrees = 0;
-    this.strongEncryption = false;
-    this.slidingDictionarySize = 0;
-    return this;
-  }
-  encode() {
-    return getShortBytes(
-      (this.descriptor ? DATA_DESCRIPTOR_FLAG : 0) | (this.utf8 ? UFT8_NAMES_FLAG : 0) | (this.encryption ? ENCRYPTION_FLAG : 0) | (this.strongEncryption ? STRONG_ENCRYPTION_FLAG : 0)
-    );
-  }
-  static parse(buf, offset) {
-    var flag = getShortBytesValue(buf, offset);
-    var gbp = new _GeneralPurposeBit();
-    gbp.useDataDescriptor((flag & DATA_DESCRIPTOR_FLAG) !== 0);
-    gbp.useUTF8ForNames((flag & UFT8_NAMES_FLAG) !== 0);
-    gbp.useStrongEncryption((flag & STRONG_ENCRYPTION_FLAG) !== 0);
-    gbp.useEncryption((flag & ENCRYPTION_FLAG) !== 0);
-    gbp.setSlidingDictionarySize(
-      (flag & SLIDING_DICTIONARY_SIZE_FLAG) !== 0 ? 8192 : 4096
-    );
-    gbp.setNumberOfShannonFanoTrees(
-      (flag & NUMBER_OF_SHANNON_FANO_TREES_FLAG) !== 0 ? 3 : 2
-    );
-    return gbp;
-  }
-  setNumberOfShannonFanoTrees(n) {
-    this.numberOfShannonFanoTrees = n;
-  }
-  getNumberOfShannonFanoTrees() {
-    return this.numberOfShannonFanoTrees;
-  }
-  setSlidingDictionarySize(n) {
-    this.slidingDictionarySize = n;
-  }
-  getSlidingDictionarySize() {
-    return this.slidingDictionarySize;
-  }
-  useDataDescriptor(b) {
-    this.descriptor = b;
-  }
-  usesDataDescriptor() {
-    return this.descriptor;
-  }
-  useEncryption(b) {
-    this.encryption = b;
-  }
-  usesEncryption() {
-    return this.encryption;
-  }
-  useStrongEncryption(b) {
-    this.strongEncryption = b;
-  }
-  usesStrongEncryption() {
-    return this.strongEncryption;
-  }
-  useUTF8ForNames(b) {
-    this.utf8 = b;
-  }
-  usesUTF8ForNames() {
-    return this.utf8;
-  }
-};
-
-// ../../../node_modules/compress-commons/lib/archivers/zip/unix-stat.js
-var PERM_MASK = 4095;
-var FILE_TYPE_FLAG = 61440;
-var LINK_FLAG = 40960;
-var FILE_FLAG = 32768;
-var DIR_FLAG = 16384;
-var DEFAULT_LINK_PERM = 511;
-var DEFAULT_DIR_PERM = 493;
-var DEFAULT_FILE_PERM = 420;
-var unix_stat_default = {
-  PERM_MASK,
-  FILE_TYPE_FLAG,
-  LINK_FLAG,
-  FILE_FLAG,
-  DIR_FLAG,
-  DEFAULT_LINK_PERM,
-  DEFAULT_DIR_PERM,
-  DEFAULT_FILE_PERM
-};
 
 // ../../../node_modules/compress-commons/lib/archivers/zip/constants.js
 var EMPTY = Buffer.alloc(0);
-var SHORT_MASK = 65535;
-var SHORT_SHIFT = 16;
 var SHORT_ZERO = Buffer.from(Array(2));
 var LONG_ZERO = Buffer.from(Array(4));
-var MIN_VERSION_INITIAL = 10;
-var MIN_VERSION_DATA_DESCRIPTOR = 20;
-var MIN_VERSION_ZIP64 = 45;
-var VERSION_MADEBY = 45;
-var METHOD_STORED = 0;
-var METHOD_DEFLATED = 8;
-var PLATFORM_UNIX = 3;
-var PLATFORM_FAT = 0;
-var SIG_LFH = 67324752;
-var SIG_DD = 134695760;
-var SIG_CFH = 33639248;
-var SIG_EOCD = 101010256;
-var SIG_ZIP64_EOCD = 101075792;
-var SIG_ZIP64_EOCD_LOC = 117853008;
-var ZIP64_MAGIC_SHORT = 65535;
-var ZIP64_MAGIC = 4294967295;
-var ZIP64_EXTRA_ID = 1;
-var ZLIB_BEST_SPEED = 1;
-var MODE_MASK = 4095;
-var S_IFDIR = 16384;
-var S_IFREG = 32768;
-var S_DOS_A = 32;
-var S_DOS_D = 16;
-
-// ../../../node_modules/compress-commons/lib/archivers/zip/zip-archive-entry.js
-var ZipArchiveEntry = class extends ArchiveEntry {
-  constructor(name) {
-    super();
-    this.platform = PLATFORM_FAT;
-    this.method = -1;
-    this.name = null;
-    this.size = 0;
-    this.csize = 0;
-    this.gpb = new GeneralPurposeBit();
-    this.crc = 0;
-    this.time = -1;
-    this.minver = MIN_VERSION_INITIAL;
-    this.mode = -1;
-    this.extra = null;
-    this.exattr = 0;
-    this.inattr = 0;
-    this.comment = null;
-    if (name) {
-      this.setName(name);
-    }
-  }
-  /**
-   * Returns the extra fields related to the entry.
-   *
-   * @returns {Buffer}
-   */
-  getCentralDirectoryExtra() {
-    return this.getExtra();
-  }
-  /**
-   * Returns the comment set for the entry.
-   *
-   * @returns {string}
-   */
-  getComment() {
-    return this.comment !== null ? this.comment : "";
-  }
-  /**
-   * Returns the compressed size of the entry.
-   *
-   * @returns {number}
-   */
-  getCompressedSize() {
-    return this.csize;
-  }
-  /**
-   * Returns the CRC32 digest for the entry.
-   *
-   * @returns {number}
-   */
-  getCrc() {
-    return this.crc;
-  }
-  /**
-   * Returns the external file attributes for the entry.
-   *
-   * @returns {number}
-   */
-  getExternalAttributes = function() {
-    return this.exattr;
-  };
-  /**
-   * Returns the extra fields related to the entry.
-   *
-   * @returns {Buffer}
-   */
-  getExtra() {
-    return this.extra !== null ? this.extra : EMPTY;
-  }
-  /**
-   * Returns the general purpose bits related to the entry.
-   *
-   * @returns {GeneralPurposeBit}
-   */
-  getGeneralPurposeBit() {
-    return this.gpb;
-  }
-  /**
-   * Returns the internal file attributes for the entry.
-   *
-   * @returns {number}
-   */
-  getInternalAttributes() {
-    return this.inattr;
-  }
-  /**
-   * Returns the last modified date of the entry.
-   *
-   * @returns {number}
-   */
-  getLastModifiedDate() {
-    return this.getTime();
-  }
-  /**
-   * Returns the extra fields related to the entry.
-   *
-   * @returns {Buffer}
-   */
-  getLocalFileDataExtra() {
-    return this.getExtra();
-  }
-  /**
-   * Returns the compression method used on the entry.
-   *
-   * @returns {number}
-   */
-  getMethod() {
-    return this.method;
-  }
-  /**
-   * Returns the filename of the entry.
-   *
-   * @returns {string}
-   */
-  getName() {
-    return this.name;
-  }
-  /**
-   * Returns the platform on which the entry was made.
-   *
-   * @returns {number}
-   */
-  getPlatform() {
-    return this.platform;
-  }
-  /**
-   * Returns the size of the entry.
-   *
-   * @returns {number}
-   */
-  getSize() {
-    return this.size;
-  }
-  /**
-   * Returns a date object representing the last modified date of the entry.
-   *
-   * @returns {number|Date}
-   */
-  getTime() {
-    return this.time !== -1 ? dosToDate(this.time) : -1;
-  }
-  /**
-   * Returns the DOS timestamp for the entry.
-   *
-   * @returns {number}
-   */
-  getTimeDos() {
-    return this.time !== -1 ? this.time : 0;
-  }
-  /**
-   * Returns the UNIX file permissions for the entry.
-   *
-   * @returns {number}
-   */
-  getUnixMode() {
-    return this.platform !== PLATFORM_UNIX ? 0 : this.getExternalAttributes() >> SHORT_SHIFT & SHORT_MASK;
-  }
-  /**
-   * Returns the version of ZIP needed to extract the entry.
-   *
-   * @returns {number}
-   */
-  getVersionNeededToExtract() {
-    return this.minver;
-  }
-  /**
-   * Sets the comment of the entry.
-   *
-   * @param comment
-   */
-  setComment(comment) {
-    if (Buffer.byteLength(comment) !== comment.length) {
-      this.getGeneralPurposeBit().useUTF8ForNames(true);
-    }
-    this.comment = comment;
-  }
-  /**
-   * Sets the compressed size of the entry.
-   *
-   * @param size
-   */
-  setCompressedSize(size) {
-    if (size < 0) {
-      throw new Error("invalid entry compressed size");
-    }
-    this.csize = size;
-  }
-  /**
-   * Sets the checksum of the entry.
-   *
-   * @param crc
-   */
-  setCrc(crc) {
-    if (crc < 0) {
-      throw new Error("invalid entry crc32");
-    }
-    this.crc = crc;
-  }
-  /**
-   * Sets the external file attributes of the entry.
-   *
-   * @param attr
-   */
-  setExternalAttributes(attr) {
-    this.exattr = attr >>> 0;
-  }
-  /**
-   * Sets the extra fields related to the entry.
-   *
-   * @param extra
-   */
-  setExtra(extra) {
-    this.extra = extra;
-  }
-  /**
-   * Sets the general purpose bits related to the entry.
-   *
-   * @param gpb
-   */
-  setGeneralPurposeBit(gpb) {
-    if (!(gpb instanceof GeneralPurposeBit)) {
-      throw new Error("invalid entry GeneralPurposeBit");
-    }
-    this.gpb = gpb;
-  }
-  /**
-   * Sets the internal file attributes of the entry.
-   *
-   * @param attr
-   */
-  setInternalAttributes(attr) {
-    this.inattr = attr;
-  }
-  /**
-   * Sets the compression method of the entry.
-   *
-   * @param method
-   */
-  setMethod(method) {
-    if (method < 0) {
-      throw new Error("invalid entry compression method");
-    }
-    this.method = method;
-  }
-  /**
-   * Sets the name of the entry.
-   *
-   * @param name
-   * @param prependSlash
-   */
-  setName(name, prependSlash = false) {
-    name = (0, import_normalize_path.default)(name, false).replace(/^\w+:/, "").replace(/^(\.\.\/|\/)+/, "");
-    if (prependSlash) {
-      name = `/${name}`;
-    }
-    if (Buffer.byteLength(name) !== name.length) {
-      this.getGeneralPurposeBit().useUTF8ForNames(true);
-    }
-    this.name = name;
-  }
-  /**
-   * Sets the platform on which the entry was made.
-   *
-   * @param platform
-   */
-  setPlatform(platform) {
-    this.platform = platform;
-  }
-  /**
-   * Sets the size of the entry.
-   *
-   * @param size
-   */
-  setSize(size) {
-    if (size < 0) {
-      throw new Error("invalid entry size");
-    }
-    this.size = size;
-  }
-  /**
-   * Sets the time of the entry.
-   *
-   * @param time
-   * @param forceLocalTime
-   */
-  setTime(time, forceLocalTime) {
-    if (!(time instanceof Date)) {
-      throw new Error("invalid entry time");
-    }
-    this.time = dateToDos(time, forceLocalTime);
-  }
-  /**
-   * Sets the UNIX file permissions for the entry.
-   *
-   * @param mode
-   */
-  setUnixMode(mode) {
-    mode |= this.isDirectory() ? S_IFDIR : S_IFREG;
-    var extattr = 0;
-    extattr |= mode << SHORT_SHIFT | (this.isDirectory() ? S_DOS_D : S_DOS_A);
-    this.setExternalAttributes(extattr);
-    this.mode = mode & MODE_MASK;
-    this.platform = PLATFORM_UNIX;
-  }
-  /**
-   * Sets the version of ZIP needed to extract this entry.
-   *
-   * @param minver
-   */
-  setVersionNeededToExtract(minver) {
-    this.minver = minver;
-  }
-  /**
-   * Returns true if this entry represents a directory.
-   *
-   * @returns {boolean}
-   */
-  isDirectory() {
-    return this.getName().slice(-1) === "/";
-  }
-  /**
-   * Returns true if this entry represents a unix symlink,
-   * in which case the entry's content contains the target path
-   * for the symlink.
-   *
-   * @returns {boolean}
-   */
-  isUnixSymlink() {
-    return (this.getUnixMode() & unix_stat_default.FILE_TYPE_FLAG) === unix_stat_default.LINK_FLAG;
-  }
-  /**
-   * Returns true if this entry is using the ZIP64 extension of ZIP.
-   *
-   * @returns {boolean}
-   */
-  isZip64() {
-    return this.csize > ZIP64_MAGIC || this.size > ZIP64_MAGIC;
-  }
-};
-
-// ../../../node_modules/is-stream/index.js
-function isStream(stream, { checkOpen = true } = {}) {
-  return stream !== null && typeof stream === "object" && (stream.writable || stream.readable || !checkOpen || stream.writable === void 0 && stream.readable === void 0) && typeof stream.pipe === "function";
-}
 
 // ../../../node_modules/compress-commons/lib/archivers/archive-output-stream.js
 var import_readable_stream2 = __toESM(require_ours(), 1);
 
 // ../../../node_modules/compress-commons/lib/util/index.js
 var import_readable_stream = __toESM(require_ours(), 1);
-function normalizeInputSource(source) {
-  if (source === null) {
-    return Buffer.alloc(0);
-  } else if (typeof source === "string") {
-    return Buffer.from(source);
-  } else if (isStream(source) && !source._readableState) {
-    var normalized = new import_readable_stream.PassThrough();
-    source.pipe(normalized);
-    return normalized;
-  }
-  return source;
-}
-
-// ../../../node_modules/compress-commons/lib/archivers/archive-output-stream.js
-var ArchiveOutputStream = class extends import_readable_stream2.Transform {
-  constructor(options) {
-    super(options);
-    this.offset = 0;
-    this._archive = {
-      finish: false,
-      finished: false,
-      processing: false
-    };
-  }
-  _appendBuffer(zae, source, callback) {
-  }
-  _appendStream(zae, source, callback) {
-  }
-  _emitErrorCallback = function(err) {
-    if (err) {
-      this.emit("error", err);
-    }
-  };
-  _finish(ae) {
-  }
-  _normalizeEntry(ae) {
-  }
-  _transform(chunk, encoding, callback) {
-    callback(null, chunk);
-  }
-  entry(ae, source, callback) {
-    source = source || null;
-    if (typeof callback !== "function") {
-      callback = this._emitErrorCallback.bind(this);
-    }
-    if (!(ae instanceof ArchiveEntry)) {
-      callback(new Error("not a valid instance of ArchiveEntry"));
-      return;
-    }
-    if (this._archive.finish || this._archive.finished) {
-      callback(new Error("unacceptable entry after finish"));
-      return;
-    }
-    if (this._archive.processing) {
-      callback(new Error("already processing an entry"));
-      return;
-    }
-    this._archive.processing = true;
-    this._normalizeEntry(ae);
-    this._entry = ae;
-    source = normalizeInputSource(source);
-    if (Buffer.isBuffer(source)) {
-      this._appendBuffer(ae, source, callback);
-    } else if (isStream(source)) {
-      this._appendStream(ae, source, callback);
-    } else {
-      this._archive.processing = false;
-      callback(
-        new Error("input source must be valid Stream or Buffer instance")
-      );
-      return;
-    }
-    return this;
-  }
-  finish() {
-    if (this._archive.processing) {
-      this._archive.finish = true;
-      return;
-    }
-    this._finish();
-  }
-  getBytesWritten() {
-    return this.offset;
-  }
-  write(chunk, cb) {
-    if (chunk) {
-      this.offset += chunk.length;
-    }
-    return super.write(chunk, cb);
-  }
-};
 
 // ../../../node_modules/compress-commons/lib/archivers/zip/zip-archive-output-stream.js
 var import_crc_323 = __toESM(require_crc32(), 1);
@@ -7229,630 +6618,192 @@ var import_crc_323 = __toESM(require_crc32(), 1);
 // ../../../node_modules/crc32-stream/lib/crc32-stream.js
 var import_readable_stream3 = __toESM(require_ours(), 1);
 var import_crc_32 = __toESM(require_crc32(), 1);
-var CRC32Stream = class extends import_readable_stream3.Transform {
-  constructor(options) {
-    super(options);
-    this.checksum = Buffer.allocUnsafe(4);
-    this.checksum.writeInt32BE(0, 0);
-    this.rawSize = 0;
-  }
-  _transform(chunk, encoding, callback) {
-    if (chunk) {
-      this.checksum = import_crc_32.default.buf(chunk, this.checksum) >>> 0;
-      this.rawSize += chunk.length;
-    }
-    callback(null, chunk);
-  }
-  digest(encoding) {
-    const checksum = Buffer.allocUnsafe(4);
-    checksum.writeUInt32BE(this.checksum >>> 0, 0);
-    return encoding ? checksum.toString(encoding) : checksum;
-  }
-  hex() {
-    return this.digest("hex").toUpperCase();
-  }
-  size() {
-    return this.rawSize;
-  }
-};
 
 // ../../../node_modules/crc32-stream/lib/deflate-crc32-stream.js
-var import_zlib = require("zlib");
 var import_crc_322 = __toESM(require_crc32(), 1);
-var DeflateCRC32Stream = class extends import_zlib.DeflateRaw {
-  constructor(options) {
-    super(options);
-    this.checksum = Buffer.allocUnsafe(4);
-    this.checksum.writeInt32BE(0, 0);
-    this.rawSize = 0;
-    this.compressedSize = 0;
-  }
-  push(chunk, encoding) {
-    if (chunk) {
-      this.compressedSize += chunk.length;
-    }
-    return super.push(chunk, encoding);
-  }
-  _transform(chunk, encoding, callback) {
-    if (chunk) {
-      this.checksum = import_crc_322.default.buf(chunk, this.checksum) >>> 0;
-      this.rawSize += chunk.length;
-    }
-    super._transform(chunk, encoding, callback);
-  }
-  digest(encoding) {
-    const checksum = Buffer.allocUnsafe(4);
-    checksum.writeUInt32BE(this.checksum >>> 0, 0);
-    return encoding ? checksum.toString(encoding) : checksum;
-  }
-  hex() {
-    return this.digest("hex").toUpperCase();
-  }
-  size(compressed = false) {
-    if (compressed) {
-      return this.compressedSize;
-    } else {
-      return this.rawSize;
-    }
-  }
-};
-
-// ../../../node_modules/compress-commons/lib/archivers/zip/zip-archive-output-stream.js
-function _defaults(o) {
-  if (typeof o !== "object") {
-    o = {};
-  }
-  if (typeof o.zlib !== "object") {
-    o.zlib = {};
-  }
-  if (typeof o.zlib.level !== "number") {
-    o.zlib.level = ZLIB_BEST_SPEED;
-  }
-  o.forceZip64 = !!o.forceZip64;
-  o.forceLocalTime = !!o.forceLocalTime;
-  return o;
-}
-var ZipArchiveOutputStream = class extends ArchiveOutputStream {
-  constructor(options) {
-    const _options = _defaults(options);
-    super(_options);
-    this.options = _options;
-    this._entry = null;
-    this._entries = [];
-    this._archive = {
-      centralLength: 0,
-      centralOffset: 0,
-      comment: "",
-      finish: false,
-      finished: false,
-      processing: false,
-      forceZip64: _options.forceZip64,
-      forceLocalTime: _options.forceLocalTime
-    };
-  }
-  _afterAppend(ae) {
-    this._entries.push(ae);
-    if (ae.getGeneralPurposeBit().usesDataDescriptor()) {
-      this._writeDataDescriptor(ae);
-    }
-    this._archive.processing = false;
-    this._entry = null;
-    if (this._archive.finish && !this._archive.finished) {
-      this._finish();
-    }
-  }
-  _appendBuffer(ae, source, callback) {
-    if (source.length === 0) {
-      ae.setMethod(METHOD_STORED);
-    }
-    var method = ae.getMethod();
-    if (method === METHOD_STORED) {
-      ae.setSize(source.length);
-      ae.setCompressedSize(source.length);
-      ae.setCrc(import_crc_323.default.buf(source) >>> 0);
-    }
-    this._writeLocalFileHeader(ae);
-    if (method === METHOD_STORED) {
-      this.write(source);
-      this._afterAppend(ae);
-      callback(null, ae);
-      return;
-    } else if (method === METHOD_DEFLATED) {
-      this._smartStream(ae, callback).end(source);
-      return;
-    } else {
-      callback(new Error("compression method " + method + " not implemented"));
-      return;
-    }
-  }
-  _appendStream(ae, source, callback) {
-    ae.getGeneralPurposeBit().useDataDescriptor(true);
-    ae.setVersionNeededToExtract(MIN_VERSION_DATA_DESCRIPTOR);
-    this._writeLocalFileHeader(ae);
-    var smart = this._smartStream(ae, callback);
-    source.once("error", function(err) {
-      smart.emit("error", err);
-      smart.end();
-    });
-    source.pipe(smart);
-  }
-  _finish() {
-    this._archive.centralOffset = this.offset;
-    this._entries.forEach(
-      function(ae) {
-        this._writeCentralFileHeader(ae);
-      }.bind(this)
-    );
-    this._archive.centralLength = this.offset - this._archive.centralOffset;
-    if (this.isZip64()) {
-      this._writeCentralDirectoryZip64();
-    }
-    this._writeCentralDirectoryEnd();
-    this._archive.processing = false;
-    this._archive.finish = true;
-    this._archive.finished = true;
-    this.end();
-  }
-  _normalizeEntry(ae) {
-    if (ae.getMethod() === -1) {
-      ae.setMethod(METHOD_DEFLATED);
-    }
-    if (ae.getMethod() === METHOD_DEFLATED) {
-      ae.getGeneralPurposeBit().useDataDescriptor(true);
-      ae.setVersionNeededToExtract(MIN_VERSION_DATA_DESCRIPTOR);
-    }
-    if (ae.getTime() === -1) {
-      ae.setTime(/* @__PURE__ */ new Date(), this._archive.forceLocalTime);
-    }
-    ae._offsets = {
-      file: 0,
-      data: 0,
-      contents: 0
-    };
-  }
-  _smartStream(ae, callback) {
-    var deflate = ae.getMethod() === METHOD_DEFLATED;
-    var process4 = deflate ? new DeflateCRC32Stream(this.options.zlib) : new CRC32Stream();
-    var error = null;
-    function handleStuff() {
-      var digest = process4.digest().readUInt32BE(0);
-      ae.setCrc(digest);
-      ae.setSize(process4.size());
-      ae.setCompressedSize(process4.size(true));
-      this._afterAppend(ae);
-      callback(error, ae);
-    }
-    process4.once("end", handleStuff.bind(this));
-    process4.once("error", function(err) {
-      error = err;
-    });
-    process4.pipe(this, { end: false });
-    return process4;
-  }
-  _writeCentralDirectoryEnd() {
-    var records = this._entries.length;
-    var size = this._archive.centralLength;
-    var offset = this._archive.centralOffset;
-    if (this.isZip64()) {
-      records = ZIP64_MAGIC_SHORT;
-      size = ZIP64_MAGIC;
-      offset = ZIP64_MAGIC;
-    }
-    this.write(getLongBytes(SIG_EOCD));
-    this.write(SHORT_ZERO);
-    this.write(SHORT_ZERO);
-    this.write(getShortBytes(records));
-    this.write(getShortBytes(records));
-    this.write(getLongBytes(size));
-    this.write(getLongBytes(offset));
-    var comment = this.getComment();
-    var commentLength = Buffer.byteLength(comment);
-    this.write(getShortBytes(commentLength));
-    this.write(comment);
-  }
-  _writeCentralDirectoryZip64() {
-    this.write(getLongBytes(SIG_ZIP64_EOCD));
-    this.write(getEightBytes(44));
-    this.write(getShortBytes(MIN_VERSION_ZIP64));
-    this.write(getShortBytes(MIN_VERSION_ZIP64));
-    this.write(LONG_ZERO);
-    this.write(LONG_ZERO);
-    this.write(getEightBytes(this._entries.length));
-    this.write(getEightBytes(this._entries.length));
-    this.write(getEightBytes(this._archive.centralLength));
-    this.write(getEightBytes(this._archive.centralOffset));
-    this.write(getLongBytes(SIG_ZIP64_EOCD_LOC));
-    this.write(LONG_ZERO);
-    this.write(
-      getEightBytes(this._archive.centralOffset + this._archive.centralLength)
-    );
-    this.write(getLongBytes(1));
-  }
-  _writeCentralFileHeader(ae) {
-    var gpb = ae.getGeneralPurposeBit();
-    var method = ae.getMethod();
-    var fileOffset = ae._offsets.file;
-    var size = ae.getSize();
-    var compressedSize = ae.getCompressedSize();
-    if (ae.isZip64() || fileOffset > ZIP64_MAGIC) {
-      size = ZIP64_MAGIC;
-      compressedSize = ZIP64_MAGIC;
-      fileOffset = ZIP64_MAGIC;
-      ae.setVersionNeededToExtract(MIN_VERSION_ZIP64);
-      var extraBuf = Buffer.concat(
-        [
-          getShortBytes(ZIP64_EXTRA_ID),
-          getShortBytes(24),
-          getEightBytes(ae.getSize()),
-          getEightBytes(ae.getCompressedSize()),
-          getEightBytes(ae._offsets.file)
-        ],
-        28
-      );
-      ae.setExtra(extraBuf);
-    }
-    this.write(getLongBytes(SIG_CFH));
-    this.write(getShortBytes(ae.getPlatform() << 8 | VERSION_MADEBY));
-    this.write(getShortBytes(ae.getVersionNeededToExtract()));
-    this.write(gpb.encode());
-    this.write(getShortBytes(method));
-    this.write(getLongBytes(ae.getTimeDos()));
-    this.write(getLongBytes(ae.getCrc()));
-    this.write(getLongBytes(compressedSize));
-    this.write(getLongBytes(size));
-    var name = ae.getName();
-    var comment = ae.getComment();
-    var extra = ae.getCentralDirectoryExtra();
-    if (gpb.usesUTF8ForNames()) {
-      name = Buffer.from(name);
-      comment = Buffer.from(comment);
-    }
-    this.write(getShortBytes(name.length));
-    this.write(getShortBytes(extra.length));
-    this.write(getShortBytes(comment.length));
-    this.write(SHORT_ZERO);
-    this.write(getShortBytes(ae.getInternalAttributes()));
-    this.write(getLongBytes(ae.getExternalAttributes()));
-    this.write(getLongBytes(fileOffset));
-    this.write(name);
-    this.write(extra);
-    this.write(comment);
-  }
-  _writeDataDescriptor(ae) {
-    this.write(getLongBytes(SIG_DD));
-    this.write(getLongBytes(ae.getCrc()));
-    if (ae.isZip64()) {
-      this.write(getEightBytes(ae.getCompressedSize()));
-      this.write(getEightBytes(ae.getSize()));
-    } else {
-      this.write(getLongBytes(ae.getCompressedSize()));
-      this.write(getLongBytes(ae.getSize()));
-    }
-  }
-  _writeLocalFileHeader(ae) {
-    var gpb = ae.getGeneralPurposeBit();
-    var method = ae.getMethod();
-    var name = ae.getName();
-    var extra = ae.getLocalFileDataExtra();
-    if (ae.isZip64()) {
-      gpb.useDataDescriptor(true);
-      ae.setVersionNeededToExtract(MIN_VERSION_ZIP64);
-    }
-    if (gpb.usesUTF8ForNames()) {
-      name = Buffer.from(name);
-    }
-    ae._offsets.file = this.offset;
-    this.write(getLongBytes(SIG_LFH));
-    this.write(getShortBytes(ae.getVersionNeededToExtract()));
-    this.write(gpb.encode());
-    this.write(getShortBytes(method));
-    this.write(getLongBytes(ae.getTimeDos()));
-    ae._offsets.data = this.offset;
-    if (gpb.usesDataDescriptor()) {
-      this.write(LONG_ZERO);
-      this.write(LONG_ZERO);
-      this.write(LONG_ZERO);
-    } else {
-      this.write(getLongBytes(ae.getCrc()));
-      this.write(getLongBytes(ae.getCompressedSize()));
-      this.write(getLongBytes(ae.getSize()));
-    }
-    this.write(getShortBytes(name.length));
-    this.write(getShortBytes(extra.length));
-    this.write(name);
-    this.write(extra);
-    ae._offsets.contents = this.offset;
-  }
-  getComment(comment) {
-    return this._archive.comment !== null ? this._archive.comment : "";
-  }
-  isZip64() {
-    return this._archive.forceZip64 || this._entries.length > ZIP64_MAGIC_SHORT || this._archive.centralLength > ZIP64_MAGIC || this._archive.centralOffset > ZIP64_MAGIC;
-  }
-  setComment(comment) {
-    this._archive.comment = comment;
-  }
-};
 
 // ../../../node_modules/zip-stream/utils.js
 var import_normalize_path2 = __toESM(require_normalize_path(), 1);
-function dateify(dateish) {
-  dateish = dateish || /* @__PURE__ */ new Date();
-  if (dateish instanceof Date) {
-    dateish = dateish;
-  } else if (typeof dateish === "string") {
-    dateish = new Date(dateish);
-  } else {
-    dateish = /* @__PURE__ */ new Date();
-  }
-  return dateish;
-}
-function sanitizePath(filepath) {
-  return (0, import_normalize_path2.default)(filepath, false).replace(/^\w+:/, "").replace(/^(\.\.\/|\/)+/, "");
-}
-
-// ../../../node_modules/zip-stream/index.js
-var ZipStream = class extends ZipArchiveOutputStream {
-  /**
-   * @constructor
-   * @extends external:ZipArchiveOutputStream
-   * @param {Object} [options]
-   * @param {String} [options.comment] Sets the zip archive comment.
-   * @param {Boolean} [options.forceLocalTime=false] Forces the archive to contain local file times instead of UTC.
-   * @param {Boolean} [options.forceZip64=false] Forces the archive to contain ZIP64 headers.
-   * @param {Boolean} [options.store=false] Sets the compression method to STORE.
-   * @param {Object} [options.zlib] Passed to [zlib]{@link https://nodejs.org/api/zlib.html#zlib_class_options}
-   * to control compression.
-   */
-  constructor(options) {
-    options = options || {};
-    options.zlib = options.zlib || {};
-    if (typeof options.level === "number" && options.level >= 0) {
-      options.zlib.level = options.level;
-      delete options.level;
-    }
-    if (!options.forceZip64 && typeof options.zlib.level === "number" && options.zlib.level === 0) {
-      options.store = true;
-    }
-    options.namePrependSlash = options.namePrependSlash || false;
-    super(options);
-    if (options.comment && options.comment.length > 0) {
-      this.setComment(options.comment);
-    }
-  }
-  /**
-   * Normalizes entry data with fallbacks for key properties.
-   *
-   * @private
-   * @param  {Object} data
-   * @return {Object}
-   */
-  _normalizeFileData(data) {
-    data = {
-      type: "file",
-      name: null,
-      namePrependSlash: this.options.namePrependSlash,
-      linkname: null,
-      date: null,
-      mode: null,
-      store: this.options.store,
-      comment: "",
-      ...data
-    };
-    let isDir = data.type === "directory";
-    const isSymlink = data.type === "symlink";
-    if (data.name) {
-      data.name = sanitizePath(data.name);
-      if (!isSymlink && data.name.slice(-1) === "/") {
-        isDir = true;
-        data.type = "directory";
-      } else if (isDir) {
-        data.name += "/";
-      }
-    }
-    if (isDir || isSymlink) {
-      data.store = true;
-    }
-    data.date = dateify(data.date);
-    return data;
-  }
-  /**
-   * Appends an entry given an input source (text string, buffer, or stream).
-   *
-   * @param  {(Buffer|Stream|String)} source The input source.
-   * @param  {Object} data
-   * @param  {String} data.name Sets the entry name including internal path.
-   * @param  {String} [data.comment] Sets the entry comment.
-   * @param  {(String|Date)} [data.date=NOW()] Sets the entry date.
-   * @param  {Number} [data.mode=D:0755/F:0644] Sets the entry permissions.
-   * @param  {Boolean} [data.store=options.store] Sets the compression method to STORE.
-   * @param  {String} [data.type=file] Sets the entry type. Defaults to `directory`
-   * if name ends with trailing slash.
-   * @param  {Function} callback
-   * @return this
-   */
-  entry(source, data, callback) {
-    if (typeof callback !== "function") {
-      callback = this._emitErrorCallback.bind(this);
-    }
-    data = this._normalizeFileData(data);
-    if (data.type !== "file" && data.type !== "directory" && data.type !== "symlink") {
-      callback(new Error(data.type + " entries not currently supported"));
-      return;
-    }
-    if (typeof data.name !== "string" || data.name.length === 0) {
-      callback(new Error("entry name must be a non-empty string value"));
-      return;
-    }
-    if (data.type === "symlink" && typeof data.linkname !== "string") {
-      callback(
-        new Error(
-          "entry linkname must be a non-empty string value when type equals symlink"
-        )
-      );
-      return;
-    }
-    const entry = new ZipArchiveEntry(data.name);
-    entry.setTime(data.date, this.options.forceLocalTime);
-    if (data.namePrependSlash) {
-      entry.setName(data.name, true);
-    }
-    if (data.store) {
-      entry.setMethod(0);
-    }
-    if (data.comment.length > 0) {
-      entry.setComment(data.comment);
-    }
-    if (data.type === "symlink" && typeof data.mode !== "number") {
-      data.mode = 40960;
-    }
-    if (typeof data.mode === "number") {
-      if (data.type === "symlink") {
-        data.mode |= 40960;
-      }
-      entry.setUnixMode(data.mode);
-    }
-    if (data.type === "symlink" && typeof data.linkname === "string") {
-      source = Buffer.from(data.linkname);
-    }
-    return super.entry(entry, source, callback);
-  }
-  /**
-   * Finalizes the instance and prevents further appending to the archive
-   * structure (queue will continue til drained).
-   *
-   * @return void
-   */
-  finalize() {
-    this.finish();
-  }
-};
 
 // src/cli.js
-var import_node_crypto = require("node:crypto");
-var import_node_fs = require("node:fs");
 var import_promises = require("node:fs/promises");
-var import_node_http = __toESM(require("node:http"), 1);
-var import_node_https = __toESM(require("node:https"), 1);
 var import_node_path = __toESM(require("node:path"), 1);
 var import_node_process = __toESM(require("node:process"), 1);
 var DEFAULT_API_URL = "https://testingfloor.com";
-var PLATFORMS = /* @__PURE__ */ new Set(["windows", "macos", "linux"]);
-async function resolveUploadPlan(options, env = {}, cwd = import_node_process.default.cwd()) {
+var AXES = /* @__PURE__ */ new Set(["x", "y", "z"]);
+var IMAGE_MIME_TYPES = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp"
+};
+async function resolveMapPlan(options, env = {}, cwd = import_node_process.default.cwd()) {
   const configPath = options.config ? import_node_path.default.resolve(cwd, options.config) : null;
   const config = configPath ? await readJson(configPath) : {};
   const configDir = configPath ? import_node_path.default.dirname(configPath) : cwd;
-  const cliBuildRequested = Boolean(options.platform || options.archive || options.launchPath);
-  const configuredBuilds = normalizeConfiguredBuilds(config);
-  if (cliBuildRequested && configuredBuilds.length > 0) {
-    throw new Error("Use either --config builds or --platform/--archive flags, not both.");
+  const cliMapRequested = Boolean(options.levelId || options.image || options.bounds);
+  const configuredMaps = Array.isArray(config.maps) ? config.maps : [];
+  if (cliMapRequested && configuredMaps.length > 0) {
+    throw new Error("Use either --config maps or --level-id/--image flags, not both.");
   }
   const apiUrl = normalizeApiUrl(
     firstPresent(options.apiUrl, env.TESTING_FLOOR_API_URL, config.apiUrl, DEFAULT_API_URL)
   );
   const token = firstPresent(options.token, env.TESTING_FLOOR_API_TOKEN, config.token);
   const gameId = firstPresent(options.gameId, env.TESTING_FLOOR_GAME_ID, config.gameId);
-  const version = firstPresent(options.version, env.TESTING_FLOOR_VERSION, config.version);
-  const gitSha = firstPresent(options.gitSha, env.TESTING_FLOOR_GIT_SHA, env.GITHUB_SHA, config.gitSha);
-  const sourceRef = {
-    ...githubSourceRef(env),
-    ...objectValue(config.sourceRef, "sourceRef"),
-    ...parseSourceRefJson(options.sourceRefJson),
-    ...parseSourceRefEntries(options.sourceRef ?? [])
-  };
-  const rawBuilds = cliBuildRequested ? [buildFromOptions(options)] : configuredBuilds;
-  const builds = rawBuilds.map(
-    (build) => normalizeBuild(build, {
-      configDir,
-      cwd,
-      commonVersion: version,
-      commonGitSha: gitSha,
-      commonSourceRef: sourceRef
-    })
+  const appVersion = firstPresent(
+    options.appVersion,
+    env.TESTING_FLOOR_VERSION,
+    config.appVersion,
+    config.version
   );
-  validatePlan({ apiUrl, token, gameId, builds });
+  const rawMaps = cliMapRequested ? [mapFromOptions(options)] : configuredMaps;
+  const maps = rawMaps.map(
+    (map) => normalizeMap(map, { configDir, cwd, commonAppVersion: appVersion })
+  );
+  validateMapPlan({ apiUrl, token, gameId, maps });
   return {
     apiUrl,
     token,
     gameId: String(gameId),
-    builds
+    maps
   };
 }
-function normalizeConfiguredBuilds(config) {
-  if (Array.isArray(config.builds)) {
-    return config.builds;
+function parseBoundsString(raw) {
+  if (raw === void 0 || raw === null || raw === "") {
+    return null;
   }
-  if (config.platforms && typeof config.platforms === "object" && !Array.isArray(config.platforms)) {
-    return Object.entries(config.platforms).map(([platform, build]) => ({ platform, ...build }));
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    const centerX2 = numericValue(raw.centerX ?? raw.center_x, "bounds.centerX");
+    const centerZ2 = numericValue(raw.centerZ ?? raw.center_z, "bounds.centerZ");
+    const sizeX2 = numericValue(raw.sizeX ?? raw.size_x, "bounds.sizeX");
+    const sizeZ2 = numericValue(raw.sizeZ ?? raw.size_z, "bounds.sizeZ");
+    return validateBounds({ centerX: centerX2, centerZ: centerZ2, sizeX: sizeX2, sizeZ: sizeZ2 });
   }
-  return [];
-}
-function parseSourceRefEntries(entries) {
-  return entries.reduce((sourceRef, entry) => {
-    const separator = entry.indexOf("=");
-    if (separator === -1) {
-      throw new Error(`Source ref "${entry}" must be key=value.`);
-    }
-    const key = entry.slice(0, separator).trim();
-    if (!key) {
-      throw new Error("Source ref keys cannot be blank.");
-    }
-    sourceRef[key] = entry.slice(separator + 1);
-    return sourceRef;
-  }, {});
-}
-async function uploadBuild(plan, build, { log = console.error } = {}) {
-  const file = await fileInfo(build.archivePath);
-  log(`Creating ${build.platform} build from ${build.archivePath}`);
-  const hashes = await hashFile(build.archivePath);
-  const createResponse = await postJson(`${plan.apiUrl}/api/games/${plan.gameId}/builds`, plan.token, {
-    platform: build.platform,
-    version: build.version,
-    git_sha: build.gitSha,
-    archive_kind: build.archiveKind,
-    filename: build.filename,
-    byte_size: file.size,
-    checksum_md5: hashes.md5Base64,
-    checksum_sha256: hashes.sha256Hex,
-    launch_path: build.launchPath,
-    launch_args: build.launchArgs,
-    working_directory: build.workingDirectory,
-    source_ref: build.sourceRef
-  });
-  log(`Uploading ${build.filename} (${formatBytes(file.size)}) to build ${createResponse.id}`);
-  let multipartUpload = null;
-  if (createResponse.multipart_upload) {
-    multipartUpload = await uploadMultipartFile(
-      createResponse.multipart_upload,
-      build.archivePath,
-      file.size,
-      { log }
-    );
-  } else {
-    await uploadFile(createResponse.upload_url, createResponse.upload_headers ?? {}, build.archivePath, file.size, {
-      label: "Direct upload"
-    });
+  if (typeof raw !== "string") {
+    throw new Error('bounds must be a string "cx,cz,sx,sz" or an object.');
   }
-  log(`Completing build ${createResponse.id}`);
-  const completeResponse = await postJson(
-    `${plan.apiUrl}/api/game_builds/${createResponse.id}/complete`,
-    plan.token,
-    {
-      signed_id: createResponse.signed_id,
-      multipart_upload: multipartUpload
-    }
+  const parts = raw.split(",").map((piece) => piece.trim());
+  if (parts.length !== 4) {
+    throw new Error("bounds must be four comma-separated numbers: center_x,center_z,size_x,size_z.");
+  }
+  const [centerX, centerZ, sizeX, sizeZ] = parts.map(
+    (piece, index) => numericValue(piece, ["bounds.centerX", "bounds.centerZ", "bounds.sizeX", "bounds.sizeZ"][index])
   );
+  return validateBounds({ centerX, centerZ, sizeX, sizeZ });
+}
+async function uploadMap(plan, map, { log = console.error } = {}) {
+  log(`Uploading map ${map.levelId} from ${map.imagePath}`);
+  const formData = new FormData();
+  formData.append("level_id", map.levelId);
+  formData.append("bounds[center_x]", String(map.bounds.centerX));
+  formData.append("bounds[center_z]", String(map.bounds.centerZ));
+  formData.append("bounds[size_x]", String(map.bounds.sizeX));
+  formData.append("bounds[size_z]", String(map.bounds.sizeZ));
+  formData.append("map_horizontal_axis", map.horizontalAxis);
+  formData.append("map_vertical_axis", map.verticalAxis);
+  if (map.appVersion) {
+    formData.append("app_version", map.appVersion);
+  }
+  const imageBytes = await (0, import_promises.readFile)(map.imagePath);
+  const imageBlob = new Blob([imageBytes], { type: map.imageMimeType });
+  formData.append("image", imageBlob, map.imageFilename);
+  const response = await postFormData(`${plan.apiUrl}/api/games/${plan.gameId}/maps`, plan.token, formData);
   return {
-    buildId: completeResponse.id ?? createResponse.id,
-    platform: build.platform,
-    version: build.version,
-    gitSha: build.gitSha,
-    filename: build.filename,
-    checksumSha256: hashes.sha256Hex,
-    sizeBytes: file.size,
-    status: completeResponse.status ?? "ready",
-    readyAt: completeResponse.ready_at
+    id: response.id,
+    levelId: response.level_id ?? map.levelId,
+    version: response.version ?? null,
+    pinned: response.pinned ?? null,
+    appVersion: response.app_version ?? map.appVersion ?? null,
+    bounds: response.bounds ?? null,
+    horizontalAxis: response.map_horizontal_axis ?? map.horizontalAxis,
+    verticalAxis: response.map_vertical_axis ?? map.verticalAxis,
+    configured: response.configured ?? null,
+    created: response.created ?? null
   };
+}
+function mapFromOptions(options) {
+  return {
+    levelId: options.levelId,
+    image: options.image,
+    bounds: options.bounds,
+    horizontalAxis: options.horizontalAxis,
+    verticalAxis: options.verticalAxis,
+    appVersion: options.appVersion
+  };
+}
+function normalizeMap(map, { configDir, cwd, commonAppVersion }) {
+  const image = map.image ?? map.path;
+  const imagePath = image ? resolveBuildPath(image, map.fromConfig === false ? cwd : configDir) : null;
+  const bounds = parseBoundsString(map.bounds);
+  const imageFilename = imagePath ? import_node_path.default.basename(imagePath) : null;
+  const imageMimeType = imageFilename ? mimeTypeForImage(imageFilename) : null;
+  return {
+    levelId: typeof map.levelId === "string" ? map.levelId.trim() : map.levelId ?? map.level_id ?? null,
+    imagePath,
+    imageFilename,
+    imageMimeType,
+    bounds,
+    horizontalAxis: (map.horizontalAxis ?? map.map_horizontal_axis ?? "x").toLowerCase(),
+    verticalAxis: (map.verticalAxis ?? map.map_vertical_axis ?? "z").toLowerCase(),
+    appVersion: map.appVersion ?? map.app_version ?? commonAppVersion ?? null
+  };
+}
+function validateMapPlan(plan) {
+  if (!plan.token) {
+    throw new Error("Missing API token. Set TESTING_FLOOR_API_TOKEN or pass --token.");
+  }
+  if (!plan.gameId || !/^\d+$/.test(String(plan.gameId))) {
+    throw new Error("Missing numeric game id. Set gameId in config or pass --game-id.");
+  }
+  if (plan.maps.length === 0) {
+    throw new Error("No maps configured. Pass --level-id/--image/--bounds or provide config maps.");
+  }
+  for (const map of plan.maps) {
+    if (!map.levelId) {
+      throw new Error("Missing levelId for map.");
+    }
+    if (!map.imagePath) {
+      throw new Error(`Missing image path for map ${map.levelId}.`);
+    }
+    if (!map.imageMimeType) {
+      throw new Error(`Unsupported image type for ${map.imageFilename}. Use .png, .jpg, .jpeg, or .webp.`);
+    }
+    if (!map.bounds) {
+      throw new Error(`Missing bounds for map ${map.levelId}.`);
+    }
+    if (!AXES.has(map.horizontalAxis)) {
+      throw new Error(`Invalid horizontal axis "${map.horizontalAxis}". Expected x, y, or z.`);
+    }
+    if (!AXES.has(map.verticalAxis)) {
+      throw new Error(`Invalid vertical axis "${map.verticalAxis}". Expected x, y, or z.`);
+    }
+    if (map.horizontalAxis === map.verticalAxis) {
+      throw new Error(`Horizontal and vertical axes must differ (got "${map.horizontalAxis}").`);
+    }
+  }
+}
+function validateBounds({ centerX, centerZ, sizeX, sizeZ }) {
+  if (!(sizeX > 0)) {
+    throw new Error("bounds.sizeX must be greater than zero.");
+  }
+  if (!(sizeZ > 0)) {
+    throw new Error("bounds.sizeZ must be greater than zero.");
+  }
+  return { centerX, centerZ, sizeX, sizeZ };
+}
+function numericValue(value, name) {
+  if (value === void 0 || value === null || value === "") {
+    throw new Error(`${name} is required.`);
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`${name} must be a finite number, got "${value}".`);
+  }
+  return parsed;
+}
+function mimeTypeForImage(filename) {
+  return IMAGE_MIME_TYPES[import_node_path.default.extname(filename).toLowerCase()] ?? null;
 }
 async function readJson(filePath) {
   const raw = await (0, import_promises.readFile)(filePath, "utf8");
@@ -7862,116 +6813,11 @@ async function readJson(filePath) {
     throw new Error(`Could not parse ${filePath}: ${error.message}`);
   }
 }
-function buildFromOptions(options) {
-  return {
-    archive: options.archive,
-    archiveKind: options.archiveKind,
-    filename: options.filename,
-    gitSha: options.gitSha,
-    launchArgs: options.launchArg,
-    launchPath: options.launchPath,
-    platform: options.platform,
-    sourceRef: parseSourceRefEntries(options.sourceRef ?? []),
-    version: options.version,
-    workingDirectory: options.workingDirectory
-  };
-}
-function normalizeBuild(build, { configDir, cwd, commonVersion, commonGitSha, commonSourceRef }) {
-  const archive = build.archive ?? build.path;
-  return {
-    archivePath: archive ? resolveBuildPath(archive, build.fromConfig === false ? cwd : configDir) : null,
-    archiveKind: build.archiveKind ?? build.archive_kind ?? "zip",
-    filename: build.filename ?? (archive ? import_node_path.default.basename(archive) : null),
-    gitSha: build.gitSha ?? build.git_sha ?? commonGitSha,
-    launchArgs: normalizeLaunchArgs(build.launchArgs ?? build.launch_args),
-    launchPath: build.launchPath ?? build.launch_path,
-    platform: build.platform,
-    sourceRef: {
-      ...commonSourceRef,
-      ...objectValue(build.sourceRef ?? build.source_ref, "build.sourceRef")
-    },
-    version: build.version ?? commonVersion,
-    workingDirectory: build.workingDirectory ?? build.working_directory ?? "."
-  };
-}
-function normalizeLaunchArgs(value) {
-  if (value === void 0 || value === null) {
-    return [];
-  }
-  if (!Array.isArray(value)) {
-    throw new Error("launchArgs must be an array.");
-  }
-  return value.map(String);
-}
-function validatePlan(plan) {
-  if (!plan.token) {
-    throw new Error("Missing API token. Set TESTING_FLOOR_API_TOKEN or pass --token.");
-  }
-  if (!plan.gameId || !/^\d+$/.test(String(plan.gameId))) {
-    throw new Error("Missing numeric game id. Set gameId in config or pass --game-id.");
-  }
-  if (plan.builds.length === 0) {
-    throw new Error("No builds configured. Pass --platform/--archive or provide config builds.");
-  }
-  for (const build of plan.builds) {
-    if (!PLATFORMS.has(build.platform)) {
-      throw new Error(`Invalid platform "${build.platform}". Expected windows, macos, or linux.`);
-    }
-    if (build.archiveKind !== "zip") {
-      throw new Error(`Unsupported archive kind "${build.archiveKind}". Only zip is supported.`);
-    }
-    if (!build.archivePath) {
-      throw new Error(`Missing archive path for ${build.platform}.`);
-    }
-    if (!build.version) {
-      throw new Error(`Missing version for ${build.platform}.`);
-    }
-    if (!build.launchPath) {
-      throw new Error(`Missing launchPath for ${build.platform}.`);
-    }
-  }
-}
-async function fileInfo(filePath) {
-  let stats;
-  try {
-    await (0, import_promises.access)(filePath);
-    stats = await (0, import_promises.stat)(filePath);
-  } catch {
-    throw new Error(`Archive not found: ${filePath}`);
-  }
-  if (!stats.isFile()) {
-    throw new Error(`Archive must be a file: ${filePath}`);
-  }
-  if (stats.size <= 0) {
-    throw new Error(`Archive is empty: ${filePath}`);
-  }
-  return stats;
-}
-async function hashFile(filePath) {
-  const md5 = (0, import_node_crypto.createHash)("md5");
-  const sha256 = (0, import_node_crypto.createHash)("sha256");
-  await new Promise((resolve, reject) => {
-    const stream = (0, import_node_fs.createReadStream)(filePath);
-    stream.on("data", (chunk) => {
-      md5.update(chunk);
-      sha256.update(chunk);
-    });
-    stream.on("error", reject);
-    stream.on("end", resolve);
-  });
-  return {
-    md5Base64: md5.digest("base64"),
-    sha256Hex: sha256.digest("hex")
-  };
-}
-async function postJson(url, token, body) {
+async function postFormData(url, token, formData) {
   const response = await fetch(url, {
     method: "POST",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(compact(body))
+    headers: { "Authorization": `Bearer ${token}` },
+    body: formData
   });
   const text = await response.text();
   const parsed = text ? parseJsonResponse(text, url) : {};
@@ -7980,125 +6826,12 @@ async function postJson(url, token, body) {
   }
   return parsed;
 }
-async function uploadMultipartFile(multipartUpload, filePath, size, { log = console.error } = {}) {
-  const uploadId = multipartUpload.upload_id ?? multipartUpload.uploadId;
-  const partSize = Number(multipartUpload.part_size ?? multipartUpload.partSize);
-  const parts = multipartUpload.parts ?? [];
-  if (!uploadId) {
-    throw new Error("Multipart upload response is missing upload_id.");
-  }
-  if (!Number.isSafeInteger(partSize) || partSize <= 0) {
-    throw new Error("Multipart upload response has an invalid part_size.");
-  }
-  if (!Array.isArray(parts) || parts.length === 0) {
-    throw new Error("Multipart upload response is missing parts.");
-  }
-  const completedParts = [];
-  for (const part of parts) {
-    const partNumber = Number(part.part_number ?? part.partNumber);
-    if (!Number.isSafeInteger(partNumber) || partNumber <= 0) {
-      throw new Error("Multipart upload response has an invalid part number.");
-    }
-    const start = (partNumber - 1) * partSize;
-    const end = Math.min(start + partSize, size) - 1;
-    if (start >= size || end < start) {
-      throw new Error(`Multipart part ${partNumber} is outside the archive size.`);
-    }
-    const partLength = end - start + 1;
-    log(`Uploading part ${partNumber}/${parts.length} (${formatBytes(partLength)})`);
-    const headers = await uploadFile(part.upload_url ?? part.uploadUrl, part.upload_headers ?? {}, filePath, partLength, {
-      end,
-      label: `Multipart part ${partNumber}`,
-      start
-    });
-    const etag = headerValue(headers, "etag");
-    if (!etag) {
-      throw new Error(`Multipart part ${partNumber} did not return an ETag.`);
-    }
-    completedParts.push({ part_number: partNumber, etag });
-  }
-  return {
-    upload_id: uploadId,
-    parts: completedParts.sort((left, right) => left.part_number - right.part_number)
-  };
-}
-function uploadFile(uploadUrl, uploadHeaders, filePath, size, { start, end, label = "Upload" } = {}) {
-  const url = new URL(uploadUrl);
-  const client = url.protocol === "https:" ? import_node_https.default : import_node_http.default;
-  const headers = compactHeaders({ ...uploadHeaders, "Content-Length": String(size) });
-  return new Promise((resolve, reject) => {
-    const request = client.request(url, { method: "PUT", headers }, (response) => {
-      let body = "";
-      response.setEncoding("utf8");
-      response.on("data", (chunk) => {
-        body += chunk;
-      });
-      response.on("end", () => {
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          resolve(response.headers);
-        } else {
-          reject(new Error(`${label} failed with ${response.statusCode}: ${body}`));
-        }
-      });
-    });
-    request.on("error", reject);
-    (0, import_node_fs.createReadStream)(filePath, streamOptions({ start, end })).on("error", reject).pipe(request);
-  });
-}
-function compactHeaders(headers) {
-  return Object.fromEntries(
-    Object.entries(headers).filter(([, value]) => value !== void 0 && value !== null && value !== "")
-  );
-}
-function headerValue(headers, name) {
-  const value = headers[name.toLowerCase()];
-  return Array.isArray(value) ? value[0] : value;
-}
-function streamOptions({ start, end }) {
-  return compact({ start, end });
-}
-function compact(value) {
-  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
-}
 function parseJsonResponse(text, url) {
   try {
     return JSON.parse(text);
   } catch {
     throw new Error(`Expected JSON response from ${url}, got: ${text.slice(0, 160)}`);
   }
-}
-function parseSourceRefJson(raw) {
-  if (!raw) {
-    return {};
-  }
-  try {
-    return objectValue(JSON.parse(raw), "source-ref-json");
-  } catch (error) {
-    throw new Error(`Could not parse --source-ref-json: ${error.message}`);
-  }
-}
-function githubSourceRef(env) {
-  if (env.GITHUB_ACTIONS !== "true") {
-    return {};
-  }
-  return compact({
-    provider: "github_actions",
-    repository: env.GITHUB_REPOSITORY,
-    ref: env.GITHUB_REF,
-    ref_name: env.GITHUB_REF_NAME,
-    run_id: env.GITHUB_RUN_ID,
-    run_number: env.GITHUB_RUN_NUMBER,
-    sha: env.GITHUB_SHA
-  });
-}
-function objectValue(value, name) {
-  if (value === void 0 || value === null) {
-    return {};
-  }
-  if (typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`${name} must be an object.`);
-  }
-  return value;
 }
 function resolveBuildPath(filePath, baseDir) {
   return import_node_path.default.isAbsolute(filePath) ? filePath : import_node_path.default.resolve(baseDir, filePath);
@@ -8113,183 +6846,8 @@ function normalizeApiUrl(raw) {
 function firstPresent(...values) {
   return values.find((value) => value !== void 0 && value !== null && value !== "");
 }
-function formatBytes(bytes) {
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
 
 // src/action-core.js
-async function runAction(env = import_node_process2.default.env, cwd = import_node_process2.default.cwd()) {
-  const inputs = readInputs(env);
-  const build = resolveActionBuild(inputs, cwd, env);
-  const archivePath = build.archivePath ?? await zipBuildDirectory({
-    buildDirectory: build.buildDirectory,
-    archiveName: build.filename,
-    runnerTemp: env.RUNNER_TEMP ?? import_node_os.default.tmpdir()
-  });
-  const plan = await resolveUploadPlan(
-    {
-      apiUrl: inputs.apiUrl,
-      archive: archivePath,
-      filename: build.filename,
-      gameId: inputs.gameId,
-      gitSha: inputs.gitSha,
-      launchArg: build.launchArgs,
-      launchPath: build.launchPath,
-      platform: build.platform,
-      sourceRefJson: JSON.stringify(inputs.sourceRef),
-      token: inputs.apiToken,
-      version: inputs.version,
-      workingDirectory: inputs.workingDirectory
-    },
-    env,
-    cwd
-  );
-  const result = await uploadBuild(plan, plan.builds[0]);
-  writeOutput("build-id", result.buildId, env);
-  writeOutput("status", result.status, env);
-  writeOutput("ready-at", result.readyAt, env);
-  writeOutput("checksum-sha256", result.checksumSha256, env);
-  writeOutput("size-bytes", result.sizeBytes, env);
-}
-function readInputs(env) {
-  return {
-    apiToken: requiredInput(env, "api-token"),
-    apiUrl: input(env, "api-url") || "https://testingfloor.com",
-    archive: input(env, "archive"),
-    buildDirectory: input(env, "build-directory"),
-    filename: input(env, "filename"),
-    gameId: requiredInput(env, "game-id"),
-    gitSha: input(env, "git-sha"),
-    launchArgs: parseJsonInput(input(env, "launch-args") || "[]", "launch-args"),
-    launchPath: requiredInput(env, "launch-path"),
-    platform: requiredInput(env, "platform"),
-    sourceRef: parseJsonInput(input(env, "source-ref") || "{}", "source-ref"),
-    version: requiredInput(env, "version"),
-    workingDirectory: input(env, "working-directory") || "."
-  };
-}
-function resolveActionBuild(inputs, cwd = import_node_process2.default.cwd(), env = import_node_process2.default.env) {
-  if (!inputs.archive && !inputs.buildDirectory) {
-    throw new Error("Set either archive or build-directory.");
-  }
-  const archivePath = inputs.archive ? import_node_path2.default.resolve(cwd, inputs.archive) : null;
-  const buildDirectory = inputs.buildDirectory ? import_node_path2.default.resolve(cwd, inputs.buildDirectory) : null;
-  const filename = inputs.filename || (archivePath ? import_node_path2.default.basename(archivePath) : defaultArchiveName({ env, inputs }));
-  return {
-    archivePath,
-    buildDirectory,
-    filename,
-    launchArgs: inputs.launchArgs,
-    launchPath: inputs.launchPath,
-    platform: inputs.platform
-  };
-}
-function parseJsonInput(raw, name) {
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (error) {
-    throw new Error(`${name} must be valid JSON: ${error.message}`);
-  }
-  if (name === "launch-args" && !Array.isArray(parsed)) {
-    throw new Error("launch-args must be a JSON array.");
-  }
-  if (name === "source-ref" && (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))) {
-    throw new Error("source-ref must be a JSON object.");
-  }
-  return parsed;
-}
-async function zipBuildDirectory({ buildDirectory, archiveName, runnerTemp = import_node_os.default.tmpdir() }) {
-  const directory = import_node_path2.default.resolve(buildDirectory);
-  const stats = await (0, import_promises2.stat)(directory).catch(() => null);
-  if (!stats?.isDirectory()) {
-    throw new Error(`Build directory not found: ${directory}`);
-  }
-  await (0, import_promises2.mkdir)(runnerTemp, { recursive: true });
-  const archivePath = import_node_path2.default.join(runnerTemp, archiveName);
-  await createZipArchive({ directory, archivePath });
-  await (0, import_promises2.access)(archivePath);
-  return archivePath;
-}
-async function createZipArchive({ directory, archivePath }) {
-  const archive = new ZipStream({ forceZip64: true, zlib: { level: 6 } });
-  const output = (0, import_node_fs2.createWriteStream)(archivePath);
-  archive.pipe(output);
-  const archiveDone = (0, import_promises3.finished)(archive);
-  const outputDone = (0, import_promises3.finished)(output);
-  try {
-    for await (const entry of walkArchiveEntries(directory)) {
-      if (entry.type === "directory") {
-        await addZipEntry(archive, Buffer.alloc(0), {
-          date: entry.stats.mtime,
-          mode: entry.stats.mode,
-          name: entry.name,
-          type: "directory"
-        });
-      } else if (entry.type === "symlink") {
-        await addZipEntry(archive, entry.linkname, {
-          date: entry.stats.mtime,
-          mode: entry.stats.mode,
-          name: entry.name,
-          type: "symlink"
-        });
-      } else {
-        await addZipEntry(archive, (0, import_node_fs2.createReadStream)(entry.fullPath), {
-          date: entry.stats.mtime,
-          mode: entry.stats.mode,
-          name: entry.name
-        });
-      }
-    }
-    archive.finish();
-    await Promise.all([archiveDone, outputDone]);
-  } catch (error) {
-    archive.destroy(error);
-    output.destroy(error);
-    await Promise.allSettled([archiveDone, outputDone]);
-    throw error;
-  }
-}
-async function* walkArchiveEntries(root, current = root) {
-  const directory = await (0, import_promises2.opendir)(current);
-  for await (const dirent of directory) {
-    const fullPath = import_node_path2.default.join(current, dirent.name);
-    const stats = await (0, import_promises2.lstat)(fullPath);
-    const name = normalizeZipPath(import_node_path2.default.relative(root, fullPath));
-    if (stats.isDirectory()) {
-      yield { fullPath, name: `${name}/`, stats, type: "directory" };
-      yield* walkArchiveEntries(root, fullPath);
-    } else if (stats.isSymbolicLink()) {
-      yield { fullPath, linkname: await (0, import_promises2.readlink)(fullPath), name, stats, type: "symlink" };
-    } else if (stats.isFile()) {
-      yield { fullPath, name, stats, type: "file" };
-    }
-  }
-}
-function addZipEntry(archive, source, data) {
-  return new Promise((resolve, reject) => {
-    archive.entry(source, data, (error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve();
-    });
-  });
-}
-function normalizeZipPath(value) {
-  return value.split(import_node_path2.default.sep).join("/");
-}
-function defaultArchiveName({ env, inputs }) {
-  const version = inputs.version || env.GITHUB_SHA || "build";
-  return `build-${inputs.platform}-${version}.zip`;
-}
 function input(env, name) {
   const actionName = `INPUT_${name.replaceAll(" ", "_").toUpperCase()}`;
   const shellName = `INPUT_${name.toUpperCase().replaceAll("-", "_")}`;
@@ -8308,7 +6866,7 @@ function writeOutput(name, value, env) {
     return;
   }
   if (env.GITHUB_OUTPUT) {
-    (0, import_node_fs2.appendFileSync)(env.GITHUB_OUTPUT, `${name}=${value}
+    (0, import_node_fs.appendFileSync)(env.GITHUB_OUTPUT, `${name}=${value}
 `);
     return;
   }
@@ -8316,8 +6874,45 @@ function writeOutput(name, value, env) {
 `);
 }
 
-// src/action.js
-runAction().catch((error) => {
+// src/action-map.js
+async function runMapAction(env = import_node_process3.default.env, cwd = import_node_process3.default.cwd()) {
+  const options = readMapInputs(env);
+  const plan = await resolveMapPlan(options, env, cwd);
+  const result = await uploadMap(plan, plan.maps[0]);
+  writeOutput("map-id", result.id, env);
+  writeOutput("level-id", result.levelId, env);
+  writeOutput("version", result.version, env);
+  writeOutput("pinned", result.pinned, env);
+  writeOutput("app-version", result.appVersion, env);
+  writeOutput("configured", result.configured, env);
+}
+function readMapInputs(env) {
+  return {
+    apiUrl: input(env, "api-url") || void 0,
+    appVersion: input(env, "app-version") || void 0,
+    bounds: boundsFromInputs(env),
+    gameId: requiredInput(env, "game-id"),
+    horizontalAxis: input(env, "horizontal-axis") || void 0,
+    image: requiredInput(env, "image"),
+    levelId: requiredInput(env, "level-id"),
+    token: requiredInput(env, "api-token"),
+    verticalAxis: input(env, "vertical-axis") || void 0
+  };
+}
+function boundsFromInputs(env) {
+  const single = input(env, "bounds");
+  if (single) {
+    return single;
+  }
+  const centerX = requiredInput(env, "bounds-center-x");
+  const centerZ = requiredInput(env, "bounds-center-z");
+  const sizeX = requiredInput(env, "bounds-size-x");
+  const sizeZ = requiredInput(env, "bounds-size-z");
+  return { centerX, centerZ, sizeX, sizeZ };
+}
+
+// src/action-map-entry.js
+runMapAction().catch((error) => {
   console.error(`::error::${escapeCommand(error.message)}`);
   process.exitCode = 1;
 });

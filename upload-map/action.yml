@@ -1,0 +1,65 @@
+name: Upload Testing Floor map
+description: Upload a top-down level map image and bounds metadata to Testing Floor.
+author: Capitalism Inc.
+
+inputs:
+  api-token:
+    description: Testing Floor API key with maps:sync scope.
+    required: true
+  api-url:
+    description: Testing Floor base URL.
+    required: false
+    default: https://testingfloor.com
+  game-id:
+    description: Numeric Testing Floor game id.
+    required: true
+  level-id:
+    description: Level identifier the map belongs to.
+    required: true
+  image:
+    description: Path to the map image (PNG, JPG, or WEBP).
+    required: true
+  bounds:
+    description: World-space bounds as "center_x,center_z,size_x,size_z". Overrides the four scalar inputs.
+    required: false
+  bounds-center-x:
+    description: World-space bounds center X. Required if --bounds is not set.
+    required: false
+  bounds-center-z:
+    description: World-space bounds center Z. Required if --bounds is not set.
+    required: false
+  bounds-size-x:
+    description: World-space bounds size on the X axis. Required if --bounds is not set.
+    required: false
+  bounds-size-z:
+    description: World-space bounds size on the Z axis. Required if --bounds is not set.
+    required: false
+  horizontal-axis:
+    description: World axis that maps to image horizontal (x, y, or z).
+    required: false
+    default: "x"
+  vertical-axis:
+    description: World axis that maps to image vertical (x, y, or z).
+    required: false
+    default: "z"
+  app-version:
+    description: App version associated with this map snapshot. Used for telemetry-map versioning.
+    required: false
+
+outputs:
+  map-id:
+    description: Testing Floor telemetry_map id.
+  level-id:
+    description: Echoed level id.
+  version:
+    description: Telemetry map version number (when the server supports versioning).
+  pinned:
+    description: Whether this version is pinned for visualization.
+  app-version:
+    description: App version recorded with the map.
+  configured:
+    description: Whether the map is fully configured (image attached and bounds set).
+
+runs:
+  using: node20
+  main: dist/action-map.cjs
