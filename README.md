@@ -2,7 +2,7 @@
 
 Small Node CLI for uploading game artifacts to Testing Floor.
 
-It currently handles two artifact types: **builds** (ready-to-run game zips) and **maps** (top-down level images plus their world-space bounds, used to render heatmaps and event overlays).
+It currently handles two artifact types: **builds** (ready-to-run game uploads, either zip or wharf delta) and **maps** (top-down level images plus their world-space bounds, used to render heatmaps and event overlays).
 
 ## Install
 
@@ -34,6 +34,24 @@ testingfloor upload-build \
 ```
 
 The API token must belong to a user, include the `builds:create` scope, and the user must be able to manage games for the target game's organization.
+
+## Delta Builds
+
+Use `archiveKind: "wharf"` or `--archive-kind wharf` to upload a wharf patch and signature instead of a full zip. The CLI asks Testing Floor for the latest base signature for the platform, runs `butler diff`, uploads `patch.pwr` plus `patch.pwr.sig`, and Testing Floor materializes the full fallback archive server-side.
+
+```sh
+testingfloor upload-build \
+  --game-id 42 \
+  --platform windows \
+  --archive ./Builds/Windows \
+  --archive-kind wharf \
+  --butler-path butler \
+  --filename game-windows.zip \
+  --version 0.4.12 \
+  --launch-path Game.exe
+```
+
+If no previous signature exists, the CLI uses butler's empty-container target for the first upload. `--archive` may point at a build directory or an archive that butler can read.
 
 ## Multiple Platforms
 
@@ -96,6 +114,8 @@ Use this repository directly as a GitHub Action:
 ```
 
 The action accepts either `archive` or `build-directory`. When `build-directory` is supplied, the action creates a ZIP64 archive in Node before upload, without relying on runner-provided zip, tar, or PowerShell tooling.
+
+For delta uploads, set `archive-kind: wharf`. The action passes `build-directory` directly to butler instead of zipping it first.
 
 You can also run the CLI directly:
 
@@ -213,7 +233,8 @@ Build object:
 - `launchArgs`: optional array, defaults to `[]`.
 - `workingDirectory`: optional extracted-archive working directory, defaults to `"."`.
 - `filename`: optional server-visible archive filename.
-- `archiveKind`: only `zip` is supported right now.
+- `archiveKind`: `zip` or `wharf`. `wharf` requires butler.
+- `butlerPath`: optional path to the butler executable, defaults to `butler`.
 
 Map config top-level:
 
@@ -236,5 +257,6 @@ Map object:
 - `TESTING_FLOOR_GAME_ID`
 - `TESTING_FLOOR_VERSION`
 - `TESTING_FLOOR_GIT_SHA`
+- `TESTING_FLOOR_BUTLER_PATH`
 
 CLI flags override environment and config values.

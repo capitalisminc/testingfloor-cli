@@ -19,8 +19,16 @@ inputs:
   archive:
     description: Existing zip archive to upload. If omitted, build-directory is zipped first.
     required: false
+  archive-kind:
+    description: "Upload format: zip or wharf. wharf uses butler to upload patch/signature artifacts."
+    required: false
+    default: zip
+  butler-path:
+    description: Path to the butler executable when archive-kind is wharf.
+    required: false
+    default: butler
   build-directory:
-    description: Directory to zip and upload when archive is omitted.
+    description: Directory to upload. For zip uploads it is zipped first; for wharf uploads it is diffed directly.
     required: false
   filename:
     description: Filename to store for the uploaded archive.

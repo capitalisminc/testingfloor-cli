@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
+import { spawn } from "node:child_process";
 import { createReadStream } from "node:fs";
-import { access, readFile, stat } from "node:fs/promises";
+import { access, mkdtemp, opendir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
 import https from "node:https";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
@@ -22,6 +24,7 @@ const VALUE_OPTIONS = new Set([
   "archive",
   "archive-kind",
   "bounds",
+  "butler-path",
   "config",
   "filename",
   "game-id",
@@ -135,6 +138,13 @@ export async function resolveUploadPlan(options, env = {}, cwd = process.cwd()) 
     firstPresent(options.apiUrl, env.TESTING_FLOOR_API_URL, config.apiUrl, DEFAULT_API_URL)
   );
   const token = firstPresent(options.token, env.TESTING_FLOOR_API_TOKEN, config.token);
+  const butlerPath = firstPresent(
+    options.butlerPath,
+    env.TESTING_FLOOR_BUTLER_PATH,
+    config.butlerPath,
+    config.butler_path,
+    "butler"
+  );
   const gameId = firstPresent(options.gameId, env.TESTING_FLOOR_GAME_ID, config.gameId);
   const version = firstPresent(options.version, env.TESTING_FLOOR_VERSION, config.version);
   const gitSha = firstPresent(options.gitSha, env.TESTING_FLOOR_GIT_SHA, env.GITHUB_SHA, config.gitSha);
@@ -160,6 +170,7 @@ export async function resolveUploadPlan(options, env = {}, cwd = process.cwd()) 
 
   return {
     apiUrl,
+    butlerPath,
     token,
     gameId: String(gameId),
     builds
@@ -401,6 +412,10 @@ export function parseSourceRefEntries(entries) {
 }
 
 export async function uploadBuild(plan, build, { log = console.error } = {}) {
+  if (build.archiveKind === "wharf") {
+    return uploadWharfBuild(plan, build, { log });
+  }
+
   const file = await fileInfo(build.archivePath);
   log(`Creating ${build.platform} build from ${build.archivePath}`);
   const hashes = await hashFile(build.archivePath);
@@ -458,6 +473,148 @@ export async function uploadBuild(plan, build, { log = console.error } = {}) {
   };
 }
 
+async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
+  const source = await pathInfo(build.archivePath, { allowDirectory: true, label: "Build source" });
+  log(`Creating ${build.platform} wharf patch from ${build.archivePath}`);
+
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "testingfloor-wharf-"));
+  try {
+    const base = await fetchWharfBase(plan, build);
+    const targetSignaturePath = base.signatureUrl
+      ? await downloadBaseSignature(base.signatureUrl, tempDir)
+      : "/dev/null";
+    const patchPath = path.join(tempDir, "patch.pwr");
+    const signaturePath = `${patchPath}.sig`;
+
+    await runButlerDiff({
+      butlerPath: plan.butlerPath ?? "butler",
+      target: targetSignaturePath,
+      source: build.archivePath,
+      patchPath
+    });
+
+    const patch = await fileInfo(patchPath);
+    const signature = await fileInfo(signaturePath);
+    const patchHashes = await hashFile(patchPath);
+    const signatureHashes = await hashFile(signaturePath);
+
+    const createResponse = await postJson(`${plan.apiUrl}/api/games/${plan.gameId}/builds`, plan.token, {
+      platform: build.platform,
+      version: build.version,
+      git_sha: build.gitSha,
+      archive_kind: "wharf",
+      filename: build.filename,
+      byte_size: source.size,
+      wharf_patch_from_build_id: base.buildId ?? undefined,
+      patch_byte_size: patch.size,
+      patch_checksum_md5: patchHashes.md5Base64,
+      signature_byte_size: signature.size,
+      signature_checksum_md5: signatureHashes.md5Base64,
+      launch_path: build.launchPath,
+      launch_args: build.launchArgs,
+      working_directory: build.workingDirectory,
+      source_ref: build.sourceRef
+    });
+
+    const uploads = createResponse.uploads ?? {};
+    log(`Uploading wharf patch (${formatBytes(patch.size)}) to build ${createResponse.id}`);
+    const patchMultipart = await uploadArtifact(uploads.patch, patchPath, patch.size, {
+      label: "Wharf patch",
+      log
+    });
+    log(`Uploading wharf signature (${formatBytes(signature.size)}) to build ${createResponse.id}`);
+    const signatureMultipart = await uploadArtifact(uploads.signature, signaturePath, signature.size, {
+      label: "Wharf signature",
+      log
+    });
+
+    log(`Completing build ${createResponse.id}`);
+    const completeResponse = await postJson(
+      `${plan.apiUrl}/api/game_builds/${createResponse.id}/complete`,
+      plan.token,
+      {
+        patch_signed_id: uploads.patch?.signed_id,
+        signature_signed_id: uploads.signature?.signed_id,
+        patch_multipart_upload: patchMultipart ?? undefined,
+        signature_multipart_upload: signatureMultipart ?? undefined
+      }
+    );
+
+    return {
+      buildId: completeResponse.id ?? createResponse.id,
+      platform: build.platform,
+      version: build.version,
+      gitSha: build.gitSha,
+      filename: build.filename,
+      checksumSha256: completeResponse.checksum_sha256 ?? null,
+      sizeBytes: source.size,
+      status: completeResponse.status ?? "processing",
+      readyAt: completeResponse.ready_at
+    };
+  } finally {
+    await rm(tempDir, { force: true, recursive: true });
+  }
+}
+
+async function fetchWharfBase(plan, build) {
+  const response = await getJson(
+    `${plan.apiUrl}/api/games/${plan.gameId}/builds/wharf/base?platform=${encodeURIComponent(build.platform)}`,
+    plan.token
+  );
+  return {
+    buildId: response.build_id ?? response.buildId ?? null,
+    signatureUrl: response.signature_url ?? response.signatureUrl ?? null
+  };
+}
+
+async function downloadBaseSignature(signatureUrl, tempDir) {
+  const response = await fetch(signatureUrl);
+  if (!response.ok) {
+    throw new Error(`Base signature download failed with ${response.status}: ${await response.text()}`);
+  }
+
+  const signaturePath = path.join(tempDir, "base.pwr.sig");
+  await writeFile(signaturePath, Buffer.from(await response.arrayBuffer()));
+  return signaturePath;
+}
+
+function runButlerDiff({ butlerPath, target, source, patchPath }) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(butlerPath, ["diff", target, source, patchPath], {
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error((stderr || stdout || `butler diff exited with ${code}`).trim()));
+    });
+  });
+}
+
+async function uploadArtifact(uploadSpec, filePath, size, { label, log }) {
+  if (!uploadSpec) {
+    throw new Error(`${label} upload response is missing.`);
+  }
+
+  if (uploadSpec.multipart_upload) {
+    return uploadMultipartFile(uploadSpec.multipart_upload, filePath, size, { log });
+  }
+
+  await uploadFile(uploadSpec.upload_url, uploadSpec.upload_headers ?? {}, filePath, size, { label });
+  return null;
+}
+
 async function readJson(filePath) {
   const raw = await readFile(filePath, "utf8");
 
@@ -485,11 +642,12 @@ function buildFromOptions(options) {
 
 function normalizeBuild(build, { configDir, cwd, commonVersion, commonGitSha, commonSourceRef }) {
   const archive = build.archive ?? build.path;
+  const archiveKind = build.archiveKind ?? build.archive_kind ?? "zip";
 
   return {
     archivePath: archive ? resolveBuildPath(archive, build.fromConfig === false ? cwd : configDir) : null,
-    archiveKind: build.archiveKind ?? build.archive_kind ?? "zip",
-    filename: build.filename ?? (archive ? path.basename(archive) : null),
+    archiveKind,
+    filename: build.filename ?? defaultBuildFilename(archive, archiveKind),
     gitSha: build.gitSha ?? build.git_sha ?? commonGitSha,
     launchArgs: normalizeLaunchArgs(build.launchArgs ?? build.launch_args),
     launchPath: build.launchPath ?? build.launch_path,
@@ -501,6 +659,18 @@ function normalizeBuild(build, { configDir, cwd, commonVersion, commonGitSha, co
     version: build.version ?? commonVersion,
     workingDirectory: build.workingDirectory ?? build.working_directory ?? "."
   };
+}
+
+function defaultBuildFilename(archive, archiveKind) {
+  if (!archive) {
+    return null;
+  }
+
+  const name = path.basename(archive);
+  if (archiveKind === "wharf" && !path.extname(name)) {
+    return `${name}.zip`;
+  }
+  return name;
 }
 
 function normalizeLaunchArgs(value) {
@@ -533,8 +703,8 @@ function validatePlan(plan) {
       throw new Error(`Invalid platform "${build.platform}". Expected windows, macos, or linux.`);
     }
 
-    if (build.archiveKind !== "zip") {
-      throw new Error(`Unsupported archive kind "${build.archiveKind}". Only zip is supported.`);
+    if (!["zip", "wharf"].includes(build.archiveKind)) {
+      throw new Error(`Unsupported archive kind "${build.archiveKind}". Expected zip or wharf.`);
     }
 
     if (!build.archivePath) {
@@ -552,23 +722,53 @@ function validatePlan(plan) {
 }
 
 async function fileInfo(filePath) {
+  return pathInfo(filePath, { allowDirectory: false, label: "Archive" });
+}
+
+async function pathInfo(filePath, { allowDirectory, label }) {
   let stats;
   try {
     await access(filePath);
     stats = await stat(filePath);
   } catch {
-    throw new Error(`Archive not found: ${filePath}`);
+    throw new Error(`${label} not found: ${filePath}`);
+  }
+
+  if (stats.isDirectory()) {
+    if (!allowDirectory) {
+      throw new Error(`${label} must be a file: ${filePath}`);
+    }
+    const size = await directorySize(filePath);
+    if (size <= 0) {
+      throw new Error(`${label} directory is empty: ${filePath}`);
+    }
+    return { ...stats, size };
   }
 
   if (!stats.isFile()) {
-    throw new Error(`Archive must be a file: ${filePath}`);
+    throw new Error(`${label} must be a file${allowDirectory ? " or directory" : ""}: ${filePath}`);
   }
 
   if (stats.size <= 0) {
-    throw new Error(`Archive is empty: ${filePath}`);
+    throw new Error(`${label} is empty: ${filePath}`);
   }
 
   return stats;
+}
+
+async function directorySize(dir) {
+  let total = 0;
+  const handle = await opendir(dir);
+  for await (const entry of handle) {
+    const fullPath = path.join(dir, entry.name);
+    const entryStats = await stat(fullPath);
+    if (entryStats.isDirectory()) {
+      total += await directorySize(fullPath);
+    } else if (entryStats.isFile()) {
+      total += entryStats.size;
+    }
+  }
+  return total;
 }
 
 async function hashFile(filePath) {
@@ -599,6 +799,21 @@ async function postJson(url, token, body) {
       "Content-Type": "application/json"
     },
     body: JSON.stringify(compact(body))
+  });
+
+  const text = await response.text();
+  const parsed = text ? parseJsonResponse(text, url) : {};
+  if (!response.ok) {
+    throw new Error(parsed.error || `${response.status} ${response.statusText} from ${url}`);
+  }
+
+  return parsed;
+}
+
+async function getJson(url, token) {
+  const response = await fetch(url, {
+    method: "GET",
+    headers: { "Authorization": `Bearer ${token}` }
   });
 
   const text = await response.text();
@@ -826,10 +1041,13 @@ Environment:
   TESTING_FLOOR_GAME_ID     Numeric game id
   TESTING_FLOOR_VERSION     Build version / map app_version metadata
   TESTING_FLOOR_GIT_SHA     Git SHA metadata (builds)
+  TESTING_FLOOR_BUTLER_PATH Path to butler for wharf uploads
 
 Build options:
   --platform <platform>     windows, macos, or linux
-  --archive <path>          Zip file to upload
+  --archive <path>          Zip file, wharf-readable archive, or build directory
+  --archive-kind <kind>     zip or wharf, defaults to zip
+  --butler-path <path>      Path to butler for wharf uploads
   --version <version>       Version metadata
   --git-sha <sha>           Git SHA metadata
   --launch-path <path>      Executable path inside the extracted archive
