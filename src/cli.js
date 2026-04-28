@@ -517,14 +517,14 @@ async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
     });
 
     const uploads = createResponse.uploads ?? {};
-    log(`Uploading wharf patch (${formatBytes(patch.size)}) to build ${createResponse.id}`);
-    const patchMultipart = await uploadArtifact(uploads.patch, patchPath, patch.size, {
-      label: "Wharf patch",
-      log
-    });
     log(`Uploading wharf signature (${formatBytes(signature.size)}) to build ${createResponse.id}`);
     const signatureMultipart = await uploadArtifact(uploads.signature, signaturePath, signature.size, {
       label: "Wharf signature",
+      log
+    });
+    log(`Uploading wharf patch (${formatBytes(patch.size)}) to build ${createResponse.id}`);
+    const patchMultipart = await uploadArtifact(uploads.patch, patchPath, patch.size, {
+      label: "Wharf patch",
       log
     });
 

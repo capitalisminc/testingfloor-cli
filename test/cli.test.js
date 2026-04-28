@@ -426,6 +426,7 @@ test("uploadBuild creates and uploads wharf patch artifacts", async (t) => {
   const butlerPath = await writeFakeButler(cwd);
 
   const uploads = {};
+  const uploadOrder = [];
   let createPayload = null;
   let completePayload = null;
   const server = http.createServer(async (request, response) => {
@@ -469,6 +470,7 @@ test("uploadBuild creates and uploads wharf patch artifacts", async (t) => {
       }
 
       if (request.method === "PUT" && request.url?.startsWith("/uploads/")) {
+        uploadOrder.push(request.url);
         uploads[request.url] = {
           body: await readRequestBody(request),
           contentLength: request.headers["content-length"],
@@ -518,6 +520,7 @@ test("uploadBuild creates and uploads wharf patch artifacts", async (t) => {
   assert.equal(createPayload.wharf_patch_from_build_id, 6);
   assert.equal(createPayload.patch_byte_size, "patch bytes".length);
   assert.equal(createPayload.signature_byte_size, "signature bytes".length);
+  assert.deepEqual(uploadOrder, ["/uploads/signature", "/uploads/patch"]);
   assert.equal(uploads["/uploads/patch"].body, "patch bytes");
   assert.equal(uploads["/uploads/patch"].uploadHeader, "patch");
   assert.equal(uploads["/uploads/signature"].body, "signature bytes");
