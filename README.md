@@ -116,6 +116,7 @@ Use this repository directly as a GitHub Action:
 The action accepts either `archive` or `build-directory`. When `build-directory` is supplied, the action creates a ZIP64 archive in Node before upload, without relying on runner-provided zip, tar, or PowerShell tooling.
 
 For delta uploads, set `archive-kind: wharf`. The action passes `build-directory` directly to butler instead of zipping it first.
+In GitHub Actions, butler is installed automatically for wharf uploads. Use `butler-path` or `butler-version` only when you need to override that default.
 
 You can also run the CLI directly:
 
@@ -233,8 +234,8 @@ Build object:
 - `launchArgs`: optional array, defaults to `[]`.
 - `workingDirectory`: optional extracted-archive working directory, defaults to `"."`.
 - `filename`: optional server-visible archive filename.
-- `archiveKind`: `zip` or `wharf`. `wharf` requires butler.
-- `butlerPath`: optional path to the butler executable, defaults to `butler`.
+- `archiveKind`: `zip` or `wharf`. `wharf` requires butler when running the CLI directly.
+- `butlerPath`: optional path to the butler executable. The GitHub Action installs butler automatically for wharf uploads.
 
 Map config top-level:
 

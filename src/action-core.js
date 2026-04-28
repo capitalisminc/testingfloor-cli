@@ -1,16 +1,26 @@
 import { appendFileSync, createReadStream, createWriteStream } from "node:fs";
-import { access, lstat, mkdir, opendir, readlink, stat } from "node:fs/promises";
+import { access, chmod, lstat, mkdir, opendir, readlink, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { finished } from "node:stream/promises";
 
+import { addPath } from "@actions/core";
+import { cacheFile, downloadTool, extractZip, find as findTool } from "@actions/tool-cache";
 import ZipStream from "zip-stream";
 import { resolveUploadPlan, uploadBuild } from "./cli.js";
+
+const BUTLER_TOOL_NAME = "butler";
 
 export async function runAction(env = process.env, cwd = process.cwd()) {
   const inputs = readInputs(env);
   const build = resolveActionBuild(inputs, cwd, env);
+  const butlerPath = await resolveActionButlerPath({
+    archiveKind: build.archiveKind,
+    butlerPath: inputs.butlerPath,
+    butlerVersion: inputs.butlerVersion,
+    env
+  });
   const archivePath = build.archivePath ?? (
     build.archiveKind === "wharf"
       ? build.buildDirectory
@@ -26,7 +36,7 @@ export async function runAction(env = process.env, cwd = process.cwd()) {
       apiUrl: inputs.apiUrl,
       archive: archivePath,
       archiveKind: inputs.archiveKind,
-      butlerPath: inputs.butlerPath,
+      butlerPath,
       filename: build.filename,
       gameId: inputs.gameId,
       gitSha: inputs.gitSha,
@@ -57,6 +67,7 @@ export function readInputs(env) {
     archive: input(env, "archive"),
     archiveKind: input(env, "archive-kind") || "zip",
     butlerPath: input(env, "butler-path"),
+    butlerVersion: input(env, "butler-version") || "LATEST",
     buildDirectory: input(env, "build-directory"),
     filename: input(env, "filename"),
     gameId: requiredInput(env, "game-id"),
@@ -68,6 +79,88 @@ export function readInputs(env) {
     version: requiredInput(env, "version"),
     workingDirectory: input(env, "working-directory") || "."
   };
+}
+
+export async function resolveActionButlerPath({
+  archiveKind,
+  butlerPath,
+  butlerVersion = "LATEST",
+  env = process.env,
+  setup = setupButler
+} = {}) {
+  if (archiveKind !== "wharf") {
+    return butlerPath;
+  }
+
+  if (butlerPath) {
+    return butlerPath;
+  }
+
+  if (env.TESTING_FLOOR_BUTLER_PATH) {
+    return env.TESTING_FLOOR_BUTLER_PATH;
+  }
+
+  if (env.GITHUB_ACTIONS !== "true") {
+    return BUTLER_TOOL_NAME;
+  }
+
+  return setup({ version: butlerVersion });
+}
+
+export async function setupButler({ version = "LATEST", log = console.error } = {}) {
+  const binaryName = butlerBinaryName();
+  const cacheable = isCacheableButlerVersion(version);
+  let toolDir = cacheable ? findTool(BUTLER_TOOL_NAME, version) : "";
+
+  if (!toolDir) {
+    log(`Installing butler ${version} for wharf upload`);
+    const downloadPath = await downloadTool(butlerDownloadUrl({ version }));
+    const extractedDir = await extractZip(downloadPath);
+    const extractedBinary = path.join(extractedDir, binaryName);
+    await chmod(extractedBinary, 0o755).catch(() => {});
+
+    toolDir = cacheable
+      ? await cacheFile(extractedBinary, binaryName, BUTLER_TOOL_NAME, version)
+      : extractedDir;
+  }
+
+  addPath(toolDir);
+  return path.join(toolDir, binaryName);
+}
+
+export function butlerDownloadUrl({ platform = os.platform(), arch = os.arch(), version = "LATEST" } = {}) {
+  return `https://broth.itch.zone/butler/${butlerPlatform(platform)}-${butlerArch(arch, platform)}/${version}/archive/default`;
+}
+
+export function butlerBinaryName(platform = os.platform()) {
+  return platform === "win32" ? "butler.exe" : "butler";
+}
+
+function butlerPlatform(platform = os.platform()) {
+  if (platform === "win32") {
+    return "windows";
+  }
+  if (platform === "darwin" || platform === "linux") {
+    return platform;
+  }
+  throw new Error(`Unsupported butler platform: ${platform}`);
+}
+
+function butlerArch(arch = os.arch(), platform = os.platform()) {
+  if (arch === "x64") {
+    return "amd64";
+  }
+  if (arch === "arm64") {
+    return platform === "win32" ? "amd64" : "arm64";
+  }
+  if (arch === "arm" || arch === "ia32") {
+    return "386";
+  }
+  throw new Error(`Unsupported butler architecture: ${arch}`);
+}
+
+function isCacheableButlerVersion(version) {
+  return /^\d+\.\d+\.\d+/.test(version);
 }
 
 export function resolveActionBuild(inputs, cwd = process.cwd(), env = process.env) {
