@@ -5,7 +5,14 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { parseJsonInput, readInputs, resolveActionBuild, zipBuildDirectory } from "../src/action-core.js";
+import {
+  butlerDownloadUrl,
+  parseJsonInput,
+  readInputs,
+  resolveActionBuild,
+  resolveActionButlerPath,
+  zipBuildDirectory
+} from "../src/action-core.js";
 import {
   normalizeConfiguredBuilds,
   parseArgs,
@@ -202,6 +209,7 @@ test("readInputs accepts GitHub's hyphenated action input environment names", ()
     "INPUT_GAME-ID": "42",
     "INPUT_ARCHIVE-KIND": "wharf",
     "INPUT_BUTLER-PATH": "/opt/butler",
+    "INPUT_BUTLER-VERSION": "15.26.1",
     INPUT_PLATFORM: "windows",
     "INPUT_BUILD-DIRECTORY": "build/Mono/Release/StandaloneWindows64",
     "INPUT_LAUNCH-PATH": "Game.exe",
@@ -213,11 +221,77 @@ test("readInputs accepts GitHub's hyphenated action input environment names", ()
   assert.equal(inputs.apiToken, "tf_builds");
   assert.equal(inputs.archiveKind, "wharf");
   assert.equal(inputs.butlerPath, "/opt/butler");
+  assert.equal(inputs.butlerVersion, "15.26.1");
   assert.equal(inputs.gameId, "42");
   assert.equal(inputs.buildDirectory, "build/Mono/Release/StandaloneWindows64");
   assert.equal(inputs.launchPath, "Game.exe");
   assert.deepEqual(inputs.launchArgs, ["--safe"]);
   assert.deepEqual(inputs.sourceRef, { run_id: "123" });
+});
+
+test("resolveActionButlerPath keeps butler setup inside the action", async () => {
+  assert.equal(await resolveActionButlerPath({ archiveKind: "zip", butlerPath: null }), null);
+  assert.equal(
+    await resolveActionButlerPath({
+      archiveKind: "wharf",
+      butlerPath: "/opt/butler",
+      env: { GITHUB_ACTIONS: "true" },
+      setup: async () => {
+        throw new Error("setup should not run");
+      }
+    }),
+    "/opt/butler"
+  );
+  assert.equal(
+    await resolveActionButlerPath({
+      archiveKind: "wharf",
+      env: { GITHUB_ACTIONS: "true", TESTING_FLOOR_BUTLER_PATH: "/env/butler" },
+      setup: async () => {
+        throw new Error("setup should not run");
+      }
+    }),
+    "/env/butler"
+  );
+  assert.equal(
+    await resolveActionButlerPath({
+      archiveKind: "wharf",
+      env: {},
+      setup: async () => {
+        throw new Error("setup should not run outside GitHub Actions");
+      }
+    }),
+    "butler"
+  );
+
+  let setupCalled = false;
+  const managedPath = await resolveActionButlerPath({
+    archiveKind: "wharf",
+    butlerVersion: "15.26.1",
+    env: { GITHUB_ACTIONS: "true" },
+    setup: async ({ version }) => {
+      setupCalled = true;
+      assert.equal(version, "15.26.1");
+      return "/managed/butler";
+    }
+  });
+
+  assert.equal(setupCalled, true);
+  assert.equal(managedPath, "/managed/butler");
+});
+
+test("butlerDownloadUrl maps runner platforms to itch broth downloads", () => {
+  assert.equal(
+    butlerDownloadUrl({ platform: "linux", arch: "x64", version: "LATEST" }),
+    "https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default"
+  );
+  assert.equal(
+    butlerDownloadUrl({ platform: "darwin", arch: "arm64", version: "15.26.1" }),
+    "https://broth.itch.zone/butler/darwin-arm64/15.26.1/archive/default"
+  );
+  assert.equal(
+    butlerDownloadUrl({ platform: "win32", arch: "arm64", version: "LATEST" }),
+    "https://broth.itch.zone/butler/windows-amd64/LATEST/archive/default"
+  );
 });
 
 test("zipBuildDirectory creates a ZIP64 archive from a build directory", async () => {

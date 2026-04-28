@@ -24,9 +24,12 @@ inputs:
     required: false
     default: zip
   butler-path:
-    description: Path to the butler executable when archive-kind is wharf.
+    description: Optional path to the butler executable. For GitHub Actions wharf uploads, butler is installed automatically when omitted.
     required: false
-    default: butler
+  butler-version:
+    description: Butler version to install automatically for GitHub Actions wharf uploads.
+    required: false
+    default: LATEST
   build-directory:
     description: Directory to upload. For zip uploads it is zipped first; for wharf uploads it is diffed directly.
     required: false
