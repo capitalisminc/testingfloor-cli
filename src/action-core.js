@@ -11,16 +11,22 @@ import { resolveUploadPlan, uploadBuild } from "./cli.js";
 export async function runAction(env = process.env, cwd = process.cwd()) {
   const inputs = readInputs(env);
   const build = resolveActionBuild(inputs, cwd, env);
-  const archivePath = build.archivePath ?? await zipBuildDirectory({
-    buildDirectory: build.buildDirectory,
-    archiveName: build.filename,
-    runnerTemp: env.RUNNER_TEMP ?? os.tmpdir()
-  });
+  const archivePath = build.archivePath ?? (
+    build.archiveKind === "wharf"
+      ? build.buildDirectory
+      : await zipBuildDirectory({
+        buildDirectory: build.buildDirectory,
+        archiveName: build.filename,
+        runnerTemp: env.RUNNER_TEMP ?? os.tmpdir()
+      })
+  );
 
   const plan = await resolveUploadPlan(
     {
       apiUrl: inputs.apiUrl,
       archive: archivePath,
+      archiveKind: inputs.archiveKind,
+      butlerPath: inputs.butlerPath,
       filename: build.filename,
       gameId: inputs.gameId,
       gitSha: inputs.gitSha,
@@ -49,6 +55,8 @@ export function readInputs(env) {
     apiToken: requiredInput(env, "api-token"),
     apiUrl: input(env, "api-url") || "https://testingfloor.com",
     archive: input(env, "archive"),
+    archiveKind: input(env, "archive-kind") || "zip",
+    butlerPath: input(env, "butler-path"),
     buildDirectory: input(env, "build-directory"),
     filename: input(env, "filename"),
     gameId: requiredInput(env, "game-id"),
@@ -76,6 +84,7 @@ export function resolveActionBuild(inputs, cwd = process.cwd(), env = process.en
     archivePath,
     buildDirectory,
     filename,
+    archiveKind: inputs.archiveKind,
     launchArgs: inputs.launchArgs,
     launchPath: inputs.launchPath,
     platform: inputs.platform

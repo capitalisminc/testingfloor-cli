@@ -24,9 +24,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// ../../../node_modules/normalize-path/index.js
+// node_modules/normalize-path/index.js
 var require_normalize_path = __commonJS({
-  "../../../node_modules/normalize-path/index.js"(exports2, module2) {
+  "node_modules/normalize-path/index.js"(exports2, module2) {
     module2.exports = function(path3, stripTrailing) {
       if (typeof path3 !== "string") {
         throw new TypeError("expected path to be a string");
@@ -51,9 +51,9 @@ var require_normalize_path = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/ours/primordials.js
+// node_modules/readable-stream/lib/ours/primordials.js
 var require_primordials = __commonJS({
-  "../../../node_modules/readable-stream/lib/ours/primordials.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/ours/primordials.js"(exports2, module2) {
     "use strict";
     var AggregateError = class extends Error {
       constructor(errors) {
@@ -172,9 +172,9 @@ var require_primordials = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/ours/util/inspect.js
+// node_modules/readable-stream/lib/ours/util/inspect.js
 var require_inspect = __commonJS({
-  "../../../node_modules/readable-stream/lib/ours/util/inspect.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/ours/util/inspect.js"(exports2, module2) {
     "use strict";
     module2.exports = {
       format(format, ...args) {
@@ -223,9 +223,9 @@ var require_inspect = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/ours/errors.js
+// node_modules/readable-stream/lib/ours/errors.js
 var require_errors = __commonJS({
-  "../../../node_modules/readable-stream/lib/ours/errors.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/ours/errors.js"(exports2, module2) {
     "use strict";
     var { format, inspect } = require_inspect();
     var { AggregateError: CustomAggregateError } = require_primordials();
@@ -541,9 +541,9 @@ var require_errors = __commonJS({
   }
 });
 
-// ../../../node_modules/event-target-shim/dist/event-target-shim.js
+// node_modules/event-target-shim/dist/event-target-shim.js
 var require_event_target_shim = __commonJS({
-  "../../../node_modules/event-target-shim/dist/event-target-shim.js"(exports2, module2) {
+  "node_modules/event-target-shim/dist/event-target-shim.js"(exports2, module2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var privateData = /* @__PURE__ */ new WeakMap();
@@ -1113,9 +1113,9 @@ var require_event_target_shim = __commonJS({
   }
 });
 
-// ../../../node_modules/abort-controller/dist/abort-controller.js
+// node_modules/abort-controller/dist/abort-controller.js
 var require_abort_controller = __commonJS({
-  "../../../node_modules/abort-controller/dist/abort-controller.js"(exports2, module2) {
+  "node_modules/abort-controller/dist/abort-controller.js"(exports2, module2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var eventTargetShim = require_event_target_shim();
@@ -1209,9 +1209,9 @@ var require_abort_controller = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/ours/util.js
+// node_modules/readable-stream/lib/ours/util.js
 var require_util = __commonJS({
-  "../../../node_modules/readable-stream/lib/ours/util.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/ours/util.js"(exports2, module2) {
     "use strict";
     var bufferModule = require("buffer");
     var { format, inspect } = require_inspect();
@@ -1348,9 +1348,9 @@ var require_util = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/internal/validators.js
+// node_modules/readable-stream/lib/internal/validators.js
 var require_validators = __commonJS({
-  "../../../node_modules/readable-stream/lib/internal/validators.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/internal/validators.js"(exports2, module2) {
     "use strict";
     var {
       ArrayIsArray,
@@ -1612,16 +1612,16 @@ var require_validators = __commonJS({
   }
 });
 
-// ../../../node_modules/process/index.js
+// node_modules/process/index.js
 var require_process = __commonJS({
-  "../../../node_modules/process/index.js"(exports2, module2) {
+  "node_modules/process/index.js"(exports2, module2) {
     module2.exports = global.process;
   }
 });
 
-// ../../../node_modules/readable-stream/lib/internal/streams/utils.js
+// node_modules/readable-stream/lib/internal/streams/utils.js
 var require_utils = __commonJS({
-  "../../../node_modules/readable-stream/lib/internal/streams/utils.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/internal/streams/utils.js"(exports2, module2) {
     "use strict";
     var { SymbolAsyncIterator, SymbolIterator, SymbolFor } = require_primordials();
     var kIsDestroyed = SymbolFor("nodejs.stream.destroyed");
@@ -1828,9 +1828,9 @@ var require_utils = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/internal/streams/end-of-stream.js
+// node_modules/readable-stream/lib/internal/streams/end-of-stream.js
 var require_end_of_stream = __commonJS({
-  "../../../node_modules/readable-stream/lib/internal/streams/end-of-stream.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/internal/streams/end-of-stream.js"(exports2, module2) {
     "use strict";
     var process4 = require_process();
     var { AbortError, codes } = require_errors();
@@ -2080,9 +2080,9 @@ var require_end_of_stream = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/internal/streams/destroy.js
+// node_modules/readable-stream/lib/internal/streams/destroy.js
 var require_destroy = __commonJS({
-  "../../../node_modules/readable-stream/lib/internal/streams/destroy.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/internal/streams/destroy.js"(exports2, module2) {
     "use strict";
     var process4 = require_process();
     var {
@@ -2345,9 +2345,9 @@ var require_destroy = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/internal/streams/legacy.js
+// node_modules/readable-stream/lib/internal/streams/legacy.js
 var require_legacy = __commonJS({
-  "../../../node_modules/readable-stream/lib/internal/streams/legacy.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/internal/streams/legacy.js"(exports2, module2) {
     "use strict";
     var { ArrayIsArray, ObjectSetPrototypeOf } = require_primordials();
     var { EventEmitter: EE } = require("events");
@@ -2423,9 +2423,9 @@ var require_legacy = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/internal/streams/add-abort-signal.js
+// node_modules/readable-stream/lib/internal/streams/add-abort-signal.js
 var require_add_abort_signal = __commonJS({
-  "../../../node_modules/readable-stream/lib/internal/streams/add-abort-signal.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/internal/streams/add-abort-signal.js"(exports2, module2) {
     "use strict";
     var { SymbolDispose } = require_primordials();
     var { AbortError, codes } = require_errors();
@@ -2474,9 +2474,9 @@ var require_add_abort_signal = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/internal/streams/buffer_list.js
+// node_modules/readable-stream/lib/internal/streams/buffer_list.js
 var require_buffer_list = __commonJS({
-  "../../../node_modules/readable-stream/lib/internal/streams/buffer_list.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/internal/streams/buffer_list.js"(exports2, module2) {
     "use strict";
     var { StringPrototypeSlice, SymbolIterator, TypedArrayPrototypeSet, Uint8Array: Uint8Array2 } = require_primordials();
     var { Buffer: Buffer2 } = require("buffer");
@@ -2629,9 +2629,9 @@ var require_buffer_list = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/internal/streams/state.js
+// node_modules/readable-stream/lib/internal/streams/state.js
 var require_state = __commonJS({
-  "../../../node_modules/readable-stream/lib/internal/streams/state.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/internal/streams/state.js"(exports2, module2) {
     "use strict";
     var { MathFloor, NumberIsInteger } = require_primordials();
     var { validateInteger } = require_validators();
@@ -2671,9 +2671,9 @@ var require_state = __commonJS({
   }
 });
 
-// ../../../node_modules/safe-buffer/index.js
+// node_modules/safe-buffer/index.js
 var require_safe_buffer = __commonJS({
-  "../../../node_modules/safe-buffer/index.js"(exports2, module2) {
+  "node_modules/safe-buffer/index.js"(exports2, module2) {
     var buffer = require("buffer");
     var Buffer2 = buffer.Buffer;
     function copyProps(src, dst) {
@@ -2729,9 +2729,9 @@ var require_safe_buffer = __commonJS({
   }
 });
 
-// ../../../node_modules/string_decoder/lib/string_decoder.js
+// node_modules/string_decoder/lib/string_decoder.js
 var require_string_decoder = __commonJS({
-  "../../../node_modules/string_decoder/lib/string_decoder.js"(exports2) {
+  "node_modules/string_decoder/lib/string_decoder.js"(exports2) {
     "use strict";
     var Buffer2 = require_safe_buffer().Buffer;
     var isEncoding = Buffer2.isEncoding || function(encoding) {
@@ -2967,9 +2967,9 @@ var require_string_decoder = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/internal/streams/from.js
+// node_modules/readable-stream/lib/internal/streams/from.js
 var require_from = __commonJS({
-  "../../../node_modules/readable-stream/lib/internal/streams/from.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/internal/streams/from.js"(exports2, module2) {
     "use strict";
     var process4 = require_process();
     var { PromisePrototypeThen, SymbolAsyncIterator, SymbolIterator } = require_primordials();
@@ -3062,9 +3062,9 @@ var require_from = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/internal/streams/readable.js
+// node_modules/readable-stream/lib/internal/streams/readable.js
 var require_readable = __commonJS({
-  "../../../node_modules/readable-stream/lib/internal/streams/readable.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/internal/streams/readable.js"(exports2, module2) {
     "use strict";
     var process4 = require_process();
     var {
@@ -4028,9 +4028,9 @@ var require_readable = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/internal/streams/writable.js
+// node_modules/readable-stream/lib/internal/streams/writable.js
 var require_writable = __commonJS({
-  "../../../node_modules/readable-stream/lib/internal/streams/writable.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/internal/streams/writable.js"(exports2, module2) {
     "use strict";
     var process4 = require_process();
     var {
@@ -4649,9 +4649,9 @@ var require_writable = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/internal/streams/duplexify.js
+// node_modules/readable-stream/lib/internal/streams/duplexify.js
 var require_duplexify = __commonJS({
-  "../../../node_modules/readable-stream/lib/internal/streams/duplexify.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/internal/streams/duplexify.js"(exports2, module2) {
     var process4 = require_process();
     var bufferModule = require("buffer");
     var {
@@ -4996,9 +4996,9 @@ var require_duplexify = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/internal/streams/duplex.js
+// node_modules/readable-stream/lib/internal/streams/duplex.js
 var require_duplex = __commonJS({
-  "../../../node_modules/readable-stream/lib/internal/streams/duplex.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/internal/streams/duplex.js"(exports2, module2) {
     "use strict";
     var {
       ObjectDefineProperties,
@@ -5113,9 +5113,9 @@ var require_duplex = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/internal/streams/transform.js
+// node_modules/readable-stream/lib/internal/streams/transform.js
 var require_transform = __commonJS({
-  "../../../node_modules/readable-stream/lib/internal/streams/transform.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/internal/streams/transform.js"(exports2, module2) {
     "use strict";
     var { ObjectSetPrototypeOf, Symbol: Symbol2 } = require_primordials();
     module2.exports = Transform3;
@@ -5215,9 +5215,9 @@ var require_transform = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/internal/streams/passthrough.js
+// node_modules/readable-stream/lib/internal/streams/passthrough.js
 var require_passthrough = __commonJS({
-  "../../../node_modules/readable-stream/lib/internal/streams/passthrough.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/internal/streams/passthrough.js"(exports2, module2) {
     "use strict";
     var { ObjectSetPrototypeOf } = require_primordials();
     module2.exports = PassThrough2;
@@ -5234,9 +5234,9 @@ var require_passthrough = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/internal/streams/pipeline.js
+// node_modules/readable-stream/lib/internal/streams/pipeline.js
 var require_pipeline = __commonJS({
-  "../../../node_modules/readable-stream/lib/internal/streams/pipeline.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/internal/streams/pipeline.js"(exports2, module2) {
     var process4 = require_process();
     var { ArrayIsArray, Promise: Promise2, SymbolAsyncIterator, SymbolDispose } = require_primordials();
     var eos = require_end_of_stream();
@@ -5662,9 +5662,9 @@ var require_pipeline = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/internal/streams/compose.js
+// node_modules/readable-stream/lib/internal/streams/compose.js
 var require_compose = __commonJS({
-  "../../../node_modules/readable-stream/lib/internal/streams/compose.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/internal/streams/compose.js"(exports2, module2) {
     "use strict";
     var { pipeline } = require_pipeline();
     var Duplex = require_duplex();
@@ -5855,9 +5855,9 @@ var require_compose = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/internal/streams/operators.js
+// node_modules/readable-stream/lib/internal/streams/operators.js
 var require_operators = __commonJS({
-  "../../../node_modules/readable-stream/lib/internal/streams/operators.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/internal/streams/operators.js"(exports2, module2) {
     "use strict";
     var AbortController = globalThis.AbortController || require_abort_controller().AbortController;
     var {
@@ -6260,9 +6260,9 @@ var require_operators = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/stream/promises.js
+// node_modules/readable-stream/lib/stream/promises.js
 var require_promises = __commonJS({
-  "../../../node_modules/readable-stream/lib/stream/promises.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/stream/promises.js"(exports2, module2) {
     "use strict";
     var { ArrayPrototypePop, Promise: Promise2 } = require_primordials();
     var { isIterable, isNodeStream, isWebStream } = require_utils();
@@ -6302,9 +6302,9 @@ var require_promises = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/stream.js
+// node_modules/readable-stream/lib/stream.js
 var require_stream = __commonJS({
-  "../../../node_modules/readable-stream/lib/stream.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/stream.js"(exports2, module2) {
     "use strict";
     var { Buffer: Buffer2 } = require("buffer");
     var { ObjectDefineProperty, ObjectKeys, ReflectApply } = require_primordials();
@@ -6421,9 +6421,9 @@ var require_stream = __commonJS({
   }
 });
 
-// ../../../node_modules/readable-stream/lib/ours/index.js
+// node_modules/readable-stream/lib/ours/index.js
 var require_ours = __commonJS({
-  "../../../node_modules/readable-stream/lib/ours/index.js"(exports2, module2) {
+  "node_modules/readable-stream/lib/ours/index.js"(exports2, module2) {
     "use strict";
     var Stream = require("stream");
     if (Stream && process.env.READABLE_STREAM === "disable") {
@@ -6485,9 +6485,9 @@ var require_ours = __commonJS({
   }
 });
 
-// ../../../node_modules/crc-32/crc32.js
+// node_modules/crc-32/crc32.js
 var require_crc32 = __commonJS({
-  "../../../node_modules/crc-32/crc32.js"(exports2) {
+  "node_modules/crc-32/crc32.js"(exports2) {
     var CRC32;
     (function(factory) {
       if (typeof DO_NOT_EXPORT_CRC === "undefined") {
@@ -6586,12 +6586,12 @@ var require_crc32 = __commonJS({
 // src/action-core.js
 var import_node_fs2 = require("node:fs");
 var import_promises2 = require("node:fs/promises");
-var import_node_os = __toESM(require("node:os"), 1);
+var import_node_os2 = __toESM(require("node:os"), 1);
 var import_node_path2 = __toESM(require("node:path"), 1);
 var import_node_process2 = __toESM(require("node:process"), 1);
 var import_promises3 = require("node:stream/promises");
 
-// ../../../node_modules/compress-commons/lib/archivers/archive-entry.js
+// node_modules/compress-commons/lib/archivers/archive-entry.js
 var ArchiveEntry = class {
   getName() {
   }
@@ -6603,10 +6603,10 @@ var ArchiveEntry = class {
   }
 };
 
-// ../../../node_modules/compress-commons/lib/archivers/zip/zip-archive-entry.js
+// node_modules/compress-commons/lib/archivers/zip/zip-archive-entry.js
 var import_normalize_path = __toESM(require_normalize_path(), 1);
 
-// ../../../node_modules/compress-commons/lib/archivers/zip/util.js
+// node_modules/compress-commons/lib/archivers/zip/util.js
 function dateToDos(d, forceLocalTime) {
   forceLocalTime = forceLocalTime || false;
   var year = forceLocalTime ? d.getFullYear() : d.getUTCFullYear();
@@ -6655,7 +6655,7 @@ function getLongBytes(v) {
   return buf;
 }
 
-// ../../../node_modules/compress-commons/lib/archivers/zip/general-purpose-bit.js
+// node_modules/compress-commons/lib/archivers/zip/general-purpose-bit.js
 var DATA_DESCRIPTOR_FLAG = 1 << 3;
 var ENCRYPTION_FLAG = 1 << 0;
 var NUMBER_OF_SHANNON_FANO_TREES_FLAG = 1 << 2;
@@ -6730,7 +6730,7 @@ var GeneralPurposeBit = class _GeneralPurposeBit {
   }
 };
 
-// ../../../node_modules/compress-commons/lib/archivers/zip/unix-stat.js
+// node_modules/compress-commons/lib/archivers/zip/unix-stat.js
 var PERM_MASK = 4095;
 var FILE_TYPE_FLAG = 61440;
 var LINK_FLAG = 40960;
@@ -6750,7 +6750,7 @@ var unix_stat_default = {
   DEFAULT_FILE_PERM
 };
 
-// ../../../node_modules/compress-commons/lib/archivers/zip/constants.js
+// node_modules/compress-commons/lib/archivers/zip/constants.js
 var EMPTY = Buffer.alloc(0);
 var SHORT_MASK = 65535;
 var SHORT_SHIFT = 16;
@@ -6780,7 +6780,7 @@ var S_IFREG = 32768;
 var S_DOS_A = 32;
 var S_DOS_D = 16;
 
-// ../../../node_modules/compress-commons/lib/archivers/zip/zip-archive-entry.js
+// node_modules/compress-commons/lib/archivers/zip/zip-archive-entry.js
 var ZipArchiveEntry = class extends ArchiveEntry {
   constructor(name) {
     super();
@@ -7121,15 +7121,15 @@ var ZipArchiveEntry = class extends ArchiveEntry {
   }
 };
 
-// ../../../node_modules/is-stream/index.js
+// node_modules/is-stream/index.js
 function isStream(stream, { checkOpen = true } = {}) {
   return stream !== null && typeof stream === "object" && (stream.writable || stream.readable || !checkOpen || stream.writable === void 0 && stream.readable === void 0) && typeof stream.pipe === "function";
 }
 
-// ../../../node_modules/compress-commons/lib/archivers/archive-output-stream.js
+// node_modules/compress-commons/lib/archivers/archive-output-stream.js
 var import_readable_stream2 = __toESM(require_ours(), 1);
 
-// ../../../node_modules/compress-commons/lib/util/index.js
+// node_modules/compress-commons/lib/util/index.js
 var import_readable_stream = __toESM(require_ours(), 1);
 function normalizeInputSource(source) {
   if (source === null) {
@@ -7144,7 +7144,7 @@ function normalizeInputSource(source) {
   return source;
 }
 
-// ../../../node_modules/compress-commons/lib/archivers/archive-output-stream.js
+// node_modules/compress-commons/lib/archivers/archive-output-stream.js
 var ArchiveOutputStream = class extends import_readable_stream2.Transform {
   constructor(options) {
     super(options);
@@ -7223,10 +7223,10 @@ var ArchiveOutputStream = class extends import_readable_stream2.Transform {
   }
 };
 
-// ../../../node_modules/compress-commons/lib/archivers/zip/zip-archive-output-stream.js
+// node_modules/compress-commons/lib/archivers/zip/zip-archive-output-stream.js
 var import_crc_323 = __toESM(require_crc32(), 1);
 
-// ../../../node_modules/crc32-stream/lib/crc32-stream.js
+// node_modules/crc32-stream/lib/crc32-stream.js
 var import_readable_stream3 = __toESM(require_ours(), 1);
 var import_crc_32 = __toESM(require_crc32(), 1);
 var CRC32Stream = class extends import_readable_stream3.Transform {
@@ -7256,7 +7256,7 @@ var CRC32Stream = class extends import_readable_stream3.Transform {
   }
 };
 
-// ../../../node_modules/crc32-stream/lib/deflate-crc32-stream.js
+// node_modules/crc32-stream/lib/deflate-crc32-stream.js
 var import_zlib = require("zlib");
 var import_crc_322 = __toESM(require_crc32(), 1);
 var DeflateCRC32Stream = class extends import_zlib.DeflateRaw {
@@ -7297,7 +7297,7 @@ var DeflateCRC32Stream = class extends import_zlib.DeflateRaw {
   }
 };
 
-// ../../../node_modules/compress-commons/lib/archivers/zip/zip-archive-output-stream.js
+// node_modules/compress-commons/lib/archivers/zip/zip-archive-output-stream.js
 function _defaults(o) {
   if (typeof o !== "object") {
     o = {};
@@ -7574,7 +7574,7 @@ var ZipArchiveOutputStream = class extends ArchiveOutputStream {
   }
 };
 
-// ../../../node_modules/zip-stream/utils.js
+// node_modules/zip-stream/utils.js
 var import_normalize_path2 = __toESM(require_normalize_path(), 1);
 function dateify(dateish) {
   dateish = dateish || /* @__PURE__ */ new Date();
@@ -7591,7 +7591,7 @@ function sanitizePath(filepath) {
   return (0, import_normalize_path2.default)(filepath, false).replace(/^\w+:/, "").replace(/^(\.\.\/|\/)+/, "");
 }
 
-// ../../../node_modules/zip-stream/index.js
+// node_modules/zip-stream/index.js
 var ZipStream = class extends ZipArchiveOutputStream {
   /**
    * @constructor
@@ -7730,10 +7730,12 @@ var ZipStream = class extends ZipArchiveOutputStream {
 
 // src/cli.js
 var import_node_crypto = require("node:crypto");
+var import_node_child_process = require("node:child_process");
 var import_node_fs = require("node:fs");
 var import_promises = require("node:fs/promises");
 var import_node_http = __toESM(require("node:http"), 1);
 var import_node_https = __toESM(require("node:https"), 1);
+var import_node_os = __toESM(require("node:os"), 1);
 var import_node_path = __toESM(require("node:path"), 1);
 var import_node_process = __toESM(require("node:process"), 1);
 var DEFAULT_API_URL = "https://testingfloor.com";
@@ -7751,6 +7753,13 @@ async function resolveUploadPlan(options, env = {}, cwd = import_node_process.de
     firstPresent(options.apiUrl, env.TESTING_FLOOR_API_URL, config.apiUrl, DEFAULT_API_URL)
   );
   const token = firstPresent(options.token, env.TESTING_FLOOR_API_TOKEN, config.token);
+  const butlerPath = firstPresent(
+    options.butlerPath,
+    env.TESTING_FLOOR_BUTLER_PATH,
+    config.butlerPath,
+    config.butler_path,
+    "butler"
+  );
   const gameId = firstPresent(options.gameId, env.TESTING_FLOOR_GAME_ID, config.gameId);
   const version = firstPresent(options.version, env.TESTING_FLOOR_VERSION, config.version);
   const gitSha = firstPresent(options.gitSha, env.TESTING_FLOOR_GIT_SHA, env.GITHUB_SHA, config.gitSha);
@@ -7773,6 +7782,7 @@ async function resolveUploadPlan(options, env = {}, cwd = import_node_process.de
   validatePlan({ apiUrl, token, gameId, builds });
   return {
     apiUrl,
+    butlerPath,
     token,
     gameId: String(gameId),
     builds
@@ -7802,6 +7812,9 @@ function parseSourceRefEntries(entries) {
   }, {});
 }
 async function uploadBuild(plan, build, { log = console.error } = {}) {
+  if (build.archiveKind === "wharf") {
+    return uploadWharfBuild(plan, build, { log });
+  }
   const file = await fileInfo(build.archivePath);
   log(`Creating ${build.platform} build from ${build.archivePath}`);
   const hashes = await hashFile(build.archivePath);
@@ -7854,6 +7867,131 @@ async function uploadBuild(plan, build, { log = console.error } = {}) {
     readyAt: completeResponse.ready_at
   };
 }
+async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
+  const source = await pathInfo(build.archivePath, { allowDirectory: true, label: "Build source" });
+  log(`Creating ${build.platform} wharf patch from ${build.archivePath}`);
+  const tempDir = await (0, import_promises.mkdtemp)(import_node_path.default.join(import_node_os.default.tmpdir(), "testingfloor-wharf-"));
+  try {
+    const base = await fetchWharfBase(plan, build);
+    const targetSignaturePath = base.signatureUrl ? await downloadBaseSignature(base.signatureUrl, tempDir) : "/dev/null";
+    const patchPath = import_node_path.default.join(tempDir, "patch.pwr");
+    const signaturePath = `${patchPath}.sig`;
+    await runButlerDiff({
+      butlerPath: plan.butlerPath ?? "butler",
+      target: targetSignaturePath,
+      source: build.archivePath,
+      patchPath
+    });
+    const patch = await fileInfo(patchPath);
+    const signature = await fileInfo(signaturePath);
+    const patchHashes = await hashFile(patchPath);
+    const signatureHashes = await hashFile(signaturePath);
+    const createResponse = await postJson(`${plan.apiUrl}/api/games/${plan.gameId}/builds`, plan.token, {
+      platform: build.platform,
+      version: build.version,
+      git_sha: build.gitSha,
+      archive_kind: "wharf",
+      filename: build.filename,
+      byte_size: source.size,
+      wharf_patch_from_build_id: base.buildId ?? void 0,
+      patch_byte_size: patch.size,
+      patch_checksum_md5: patchHashes.md5Base64,
+      signature_byte_size: signature.size,
+      signature_checksum_md5: signatureHashes.md5Base64,
+      launch_path: build.launchPath,
+      launch_args: build.launchArgs,
+      working_directory: build.workingDirectory,
+      source_ref: build.sourceRef
+    });
+    const uploads = createResponse.uploads ?? {};
+    log(`Uploading wharf patch (${formatBytes(patch.size)}) to build ${createResponse.id}`);
+    const patchMultipart = await uploadArtifact(uploads.patch, patchPath, patch.size, {
+      label: "Wharf patch",
+      log
+    });
+    log(`Uploading wharf signature (${formatBytes(signature.size)}) to build ${createResponse.id}`);
+    const signatureMultipart = await uploadArtifact(uploads.signature, signaturePath, signature.size, {
+      label: "Wharf signature",
+      log
+    });
+    log(`Completing build ${createResponse.id}`);
+    const completeResponse = await postJson(
+      `${plan.apiUrl}/api/game_builds/${createResponse.id}/complete`,
+      plan.token,
+      {
+        patch_signed_id: uploads.patch?.signed_id,
+        signature_signed_id: uploads.signature?.signed_id,
+        patch_multipart_upload: patchMultipart ?? void 0,
+        signature_multipart_upload: signatureMultipart ?? void 0
+      }
+    );
+    return {
+      buildId: completeResponse.id ?? createResponse.id,
+      platform: build.platform,
+      version: build.version,
+      gitSha: build.gitSha,
+      filename: build.filename,
+      checksumSha256: completeResponse.checksum_sha256 ?? null,
+      sizeBytes: source.size,
+      status: completeResponse.status ?? "processing",
+      readyAt: completeResponse.ready_at
+    };
+  } finally {
+    await (0, import_promises.rm)(tempDir, { force: true, recursive: true });
+  }
+}
+async function fetchWharfBase(plan, build) {
+  const response = await getJson(
+    `${plan.apiUrl}/api/games/${plan.gameId}/builds/wharf/base?platform=${encodeURIComponent(build.platform)}`,
+    plan.token
+  );
+  return {
+    buildId: response.build_id ?? response.buildId ?? null,
+    signatureUrl: response.signature_url ?? response.signatureUrl ?? null
+  };
+}
+async function downloadBaseSignature(signatureUrl, tempDir) {
+  const response = await fetch(signatureUrl);
+  if (!response.ok) {
+    throw new Error(`Base signature download failed with ${response.status}: ${await response.text()}`);
+  }
+  const signaturePath = import_node_path.default.join(tempDir, "base.pwr.sig");
+  await (0, import_promises.writeFile)(signaturePath, Buffer.from(await response.arrayBuffer()));
+  return signaturePath;
+}
+function runButlerDiff({ butlerPath, target, source, patchPath }) {
+  return new Promise((resolve, reject) => {
+    const child = (0, import_node_child_process.spawn)(butlerPath, ["diff", target, source, patchPath], {
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error((stderr || stdout || `butler diff exited with ${code}`).trim()));
+    });
+  });
+}
+async function uploadArtifact(uploadSpec, filePath, size, { label, log }) {
+  if (!uploadSpec) {
+    throw new Error(`${label} upload response is missing.`);
+  }
+  if (uploadSpec.multipart_upload) {
+    return uploadMultipartFile(uploadSpec.multipart_upload, filePath, size, { log });
+  }
+  await uploadFile(uploadSpec.upload_url, uploadSpec.upload_headers ?? {}, filePath, size, { label });
+  return null;
+}
 async function readJson(filePath) {
   const raw = await (0, import_promises.readFile)(filePath, "utf8");
   try {
@@ -7878,10 +8016,11 @@ function buildFromOptions(options) {
 }
 function normalizeBuild(build, { configDir, cwd, commonVersion, commonGitSha, commonSourceRef }) {
   const archive = build.archive ?? build.path;
+  const archiveKind = build.archiveKind ?? build.archive_kind ?? "zip";
   return {
     archivePath: archive ? resolveBuildPath(archive, build.fromConfig === false ? cwd : configDir) : null,
-    archiveKind: build.archiveKind ?? build.archive_kind ?? "zip",
-    filename: build.filename ?? (archive ? import_node_path.default.basename(archive) : null),
+    archiveKind,
+    filename: build.filename ?? defaultBuildFilename(archive, archiveKind),
     gitSha: build.gitSha ?? build.git_sha ?? commonGitSha,
     launchArgs: normalizeLaunchArgs(build.launchArgs ?? build.launch_args),
     launchPath: build.launchPath ?? build.launch_path,
@@ -7893,6 +8032,16 @@ function normalizeBuild(build, { configDir, cwd, commonVersion, commonGitSha, co
     version: build.version ?? commonVersion,
     workingDirectory: build.workingDirectory ?? build.working_directory ?? "."
   };
+}
+function defaultBuildFilename(archive, archiveKind) {
+  if (!archive) {
+    return null;
+  }
+  const name = import_node_path.default.basename(archive);
+  if (archiveKind === "wharf" && !import_node_path.default.extname(name)) {
+    return `${name}.zip`;
+  }
+  return name;
 }
 function normalizeLaunchArgs(value) {
   if (value === void 0 || value === null) {
@@ -7917,8 +8066,8 @@ function validatePlan(plan) {
     if (!PLATFORMS.has(build.platform)) {
       throw new Error(`Invalid platform "${build.platform}". Expected windows, macos, or linux.`);
     }
-    if (build.archiveKind !== "zip") {
-      throw new Error(`Unsupported archive kind "${build.archiveKind}". Only zip is supported.`);
+    if (!["zip", "wharf"].includes(build.archiveKind)) {
+      throw new Error(`Unsupported archive kind "${build.archiveKind}". Expected zip or wharf.`);
     }
     if (!build.archivePath) {
       throw new Error(`Missing archive path for ${build.platform}.`);
@@ -7932,20 +8081,47 @@ function validatePlan(plan) {
   }
 }
 async function fileInfo(filePath) {
+  return pathInfo(filePath, { allowDirectory: false, label: "Archive" });
+}
+async function pathInfo(filePath, { allowDirectory, label }) {
   let stats;
   try {
     await (0, import_promises.access)(filePath);
     stats = await (0, import_promises.stat)(filePath);
   } catch {
-    throw new Error(`Archive not found: ${filePath}`);
+    throw new Error(`${label} not found: ${filePath}`);
+  }
+  if (stats.isDirectory()) {
+    if (!allowDirectory) {
+      throw new Error(`${label} must be a file: ${filePath}`);
+    }
+    const size = await directorySize(filePath);
+    if (size <= 0) {
+      throw new Error(`${label} directory is empty: ${filePath}`);
+    }
+    return { ...stats, size };
   }
   if (!stats.isFile()) {
-    throw new Error(`Archive must be a file: ${filePath}`);
+    throw new Error(`${label} must be a file${allowDirectory ? " or directory" : ""}: ${filePath}`);
   }
   if (stats.size <= 0) {
-    throw new Error(`Archive is empty: ${filePath}`);
+    throw new Error(`${label} is empty: ${filePath}`);
   }
   return stats;
+}
+async function directorySize(dir) {
+  let total = 0;
+  const handle = await (0, import_promises.opendir)(dir);
+  for await (const entry of handle) {
+    const fullPath = import_node_path.default.join(dir, entry.name);
+    const entryStats = await (0, import_promises.stat)(fullPath);
+    if (entryStats.isDirectory()) {
+      total += await directorySize(fullPath);
+    } else if (entryStats.isFile()) {
+      total += entryStats.size;
+    }
+  }
+  return total;
 }
 async function hashFile(filePath) {
   const md5 = (0, import_node_crypto.createHash)("md5");
@@ -7972,6 +8148,18 @@ async function postJson(url, token, body) {
       "Content-Type": "application/json"
     },
     body: JSON.stringify(compact(body))
+  });
+  const text = await response.text();
+  const parsed = text ? parseJsonResponse(text, url) : {};
+  if (!response.ok) {
+    throw new Error(parsed.error || `${response.status} ${response.statusText} from ${url}`);
+  }
+  return parsed;
+}
+async function getJson(url, token) {
+  const response = await fetch(url, {
+    method: "GET",
+    headers: { "Authorization": `Bearer ${token}` }
   });
   const text = await response.text();
   const parsed = text ? parseJsonResponse(text, url) : {};
@@ -8127,15 +8315,17 @@ function formatBytes(bytes) {
 async function runAction(env = import_node_process2.default.env, cwd = import_node_process2.default.cwd()) {
   const inputs = readInputs(env);
   const build = resolveActionBuild(inputs, cwd, env);
-  const archivePath = build.archivePath ?? await zipBuildDirectory({
+  const archivePath = build.archivePath ?? (build.archiveKind === "wharf" ? build.buildDirectory : await zipBuildDirectory({
     buildDirectory: build.buildDirectory,
     archiveName: build.filename,
-    runnerTemp: env.RUNNER_TEMP ?? import_node_os.default.tmpdir()
-  });
+    runnerTemp: env.RUNNER_TEMP ?? import_node_os2.default.tmpdir()
+  }));
   const plan = await resolveUploadPlan(
     {
       apiUrl: inputs.apiUrl,
       archive: archivePath,
+      archiveKind: inputs.archiveKind,
+      butlerPath: inputs.butlerPath,
       filename: build.filename,
       gameId: inputs.gameId,
       gitSha: inputs.gitSha,
@@ -8162,6 +8352,8 @@ function readInputs(env) {
     apiToken: requiredInput(env, "api-token"),
     apiUrl: input(env, "api-url") || "https://testingfloor.com",
     archive: input(env, "archive"),
+    archiveKind: input(env, "archive-kind") || "zip",
+    butlerPath: input(env, "butler-path"),
     buildDirectory: input(env, "build-directory"),
     filename: input(env, "filename"),
     gameId: requiredInput(env, "game-id"),
@@ -8185,6 +8377,7 @@ function resolveActionBuild(inputs, cwd = import_node_process2.default.cwd(), en
     archivePath,
     buildDirectory,
     filename,
+    archiveKind: inputs.archiveKind,
     launchArgs: inputs.launchArgs,
     launchPath: inputs.launchPath,
     platform: inputs.platform
@@ -8205,7 +8398,7 @@ function parseJsonInput(raw, name) {
   }
   return parsed;
 }
-async function zipBuildDirectory({ buildDirectory, archiveName, runnerTemp = import_node_os.default.tmpdir() }) {
+async function zipBuildDirectory({ buildDirectory, archiveName, runnerTemp = import_node_os2.default.tmpdir() }) {
   const directory = import_node_path2.default.resolve(buildDirectory);
   const stats = await (0, import_promises2.stat)(directory).catch(() => null);
   if (!stats?.isDirectory()) {
