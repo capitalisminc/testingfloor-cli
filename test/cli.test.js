@@ -28,6 +28,8 @@ import { readMapInputs } from "../src/action-map.js";
 test("parseArgs parses single build flags", () => {
   const parsed = parseArgs([
     "upload-build",
+    "--organization-id",
+    "gamedepartment",
     "--game-id",
     "42",
     "--platform=windows",
@@ -45,6 +47,7 @@ test("parseArgs parses single build flags", () => {
   ]);
 
   assert.equal(parsed.command, "upload-build");
+  assert.equal(parsed.options.organizationId, "gamedepartment");
   assert.equal(parsed.options.gameId, "42");
   assert.equal(parsed.options.platform, "windows");
   assert.deepEqual(parsed.options.launchArg, ["-screen-fullscreen", "0"]);
@@ -54,6 +57,8 @@ test("parseArgs parses single build flags", () => {
 test("parseArgs parses wharf build flags", () => {
   const parsed = parseArgs([
     "upload-build",
+    "--organization-id",
+    "gamedepartment",
     "--game-id",
     "42",
     "--platform",
@@ -106,12 +111,14 @@ test("resolveUploadPlan builds single upload from flags and env", async () => {
     {
       TESTING_FLOOR_API_TOKEN: "tf_test",
       TESTING_FLOOR_API_URL: "https://tf.test/",
+      TESTING_FLOOR_ORGANIZATION_ID: "gamedepartment",
       GITHUB_SHA: "abc123"
     },
     cwd
   );
 
   assert.equal(plan.apiUrl, "https://tf.test");
+  assert.equal(plan.organizationId, "gamedepartment");
   assert.equal(plan.gameId, "42");
   assert.equal(plan.token, "tf_test");
   assert.equal(plan.builds.length, 1);
@@ -138,7 +145,8 @@ test("resolveUploadPlan accepts wharf builds from directories", async () => {
     },
     {
       TESTING_FLOOR_API_TOKEN: "tf_test",
-      TESTING_FLOOR_BUTLER_PATH: "/usr/local/bin/butler"
+      TESTING_FLOOR_BUTLER_PATH: "/usr/local/bin/butler",
+      TESTING_FLOOR_ORGANIZATION_ID: "gamedepartment"
     },
     cwd
   );
@@ -157,6 +165,7 @@ test("resolveUploadPlan supports config builds relative to config file", async (
   await writeFile(
     path.join(configDir, "testingfloor-builds.json"),
     JSON.stringify({
+      organizationId: "gamedepartment",
       gameId: 42,
       version: "0.4.12",
       builds: [
@@ -176,6 +185,25 @@ test("resolveUploadPlan supports config builds relative to config file", async (
   );
 
   assert.equal(plan.builds[0].archivePath, path.join(cwd, "game-windows.zip"));
+  assert.equal(plan.organizationId, "gamedepartment");
+});
+
+test("resolveUploadPlan requires an organization id", async () => {
+  await assert.rejects(
+    () =>
+      resolveUploadPlan(
+        {
+          archive: "game.zip",
+          gameId: "42",
+          launchPath: "Game.exe",
+          platform: "windows",
+          version: "0.4.12"
+        },
+        { TESTING_FLOOR_API_TOKEN: "tf_test" },
+        process.cwd()
+      ),
+    /Missing organization id/
+  );
 });
 
 test("parseSourceRefEntries rejects malformed entries", () => {
@@ -206,6 +234,7 @@ test("resolveActionBuild accepts explicit platform launch metadata and build dir
 test("readInputs accepts GitHub's hyphenated action input environment names", () => {
   const inputs = readInputs({
     "INPUT_API-TOKEN": "tf_builds",
+    "INPUT_ORGANIZATION-ID": "gamedepartment",
     "INPUT_GAME-ID": "42",
     "INPUT_ARCHIVE-KIND": "wharf",
     "INPUT_BUTLER-PATH": "/opt/butler",
@@ -223,6 +252,7 @@ test("readInputs accepts GitHub's hyphenated action input environment names", ()
   assert.equal(inputs.butlerPath, "/opt/butler");
   assert.equal(inputs.butlerVersion, "15.26.1");
   assert.equal(inputs.gameId, "42");
+  assert.equal(inputs.organizationId, "gamedepartment");
   assert.equal(inputs.buildDirectory, "build/Mono/Release/StandaloneWindows64");
   assert.equal(inputs.launchPath, "Game.exe");
   assert.deepEqual(inputs.launchArgs, ["--safe"]);
@@ -327,7 +357,7 @@ test("uploadBuild uploads multipart parts and completes with ETags", async (t) =
   let completePayload = null;
   const server = http.createServer(async (request, response) => {
     try {
-      if (request.method === "POST" && request.url === "/api/games/42/builds") {
+      if (request.method === "POST" && request.url === "/api/organizations/gamedepartment/games/42/builds") {
         const body = JSON.parse(await readRequestBody(request));
         assert.equal(body.byte_size, 10);
         assert.equal(body.filename, "game.zip");
@@ -382,7 +412,7 @@ test("uploadBuild uploads multipart parts and completes with ETags", async (t) =
   t.after(() => server.close());
 
   const result = await uploadBuild(
-    { apiUrl: serverUrl(server), gameId: "42", token: "tf_test" },
+    { apiUrl: serverUrl(server), organizationId: "gamedepartment", gameId: "42", token: "tf_test" },
     {
       archiveKind: "zip",
       archivePath,
@@ -431,7 +461,10 @@ test("uploadBuild creates and uploads wharf patch artifacts", async (t) => {
   let completePayload = null;
   const server = http.createServer(async (request, response) => {
     try {
-      if (request.method === "GET" && request.url === "/api/games/42/builds/wharf/base?platform=windows") {
+      if (
+        request.method === "GET" &&
+        request.url === "/api/organizations/gamedepartment/games/42/builds/wharf/base?platform=windows"
+      ) {
         writeJson(response, 200, {
           build_id: 6,
           signature_url: `${serverUrl(server)}/base.sig`
@@ -445,7 +478,7 @@ test("uploadBuild creates and uploads wharf patch artifacts", async (t) => {
         return;
       }
 
-      if (request.method === "POST" && request.url === "/api/games/42/builds") {
+      if (request.method === "POST" && request.url === "/api/organizations/gamedepartment/games/42/builds") {
         createPayload = JSON.parse(await readRequestBody(request));
         writeJson(response, 201, {
           id: 8,
@@ -498,7 +531,13 @@ test("uploadBuild creates and uploads wharf patch artifacts", async (t) => {
   t.after(() => server.close());
 
   const result = await uploadBuild(
-    { apiUrl: serverUrl(server), butlerPath, gameId: "42", token: "tf_test" },
+    {
+      apiUrl: serverUrl(server),
+      butlerPath,
+      organizationId: "gamedepartment",
+      gameId: "42",
+      token: "tf_test"
+    },
     {
       archiveKind: "wharf",
       archivePath: buildDir,
@@ -540,6 +579,8 @@ test("parseJsonInput validates action JSON inputs", () => {
 test("parseArgs parses upload-map flags", () => {
   const parsed = parseArgs([
     "upload-map",
+    "--organization-id",
+    "gamedepartment",
     "--game-id",
     "42",
     "--level-id",
@@ -556,6 +597,7 @@ test("parseArgs parses upload-map flags", () => {
   ]);
 
   assert.equal(parsed.command, "upload-map");
+  assert.equal(parsed.options.organizationId, "gamedepartment");
   assert.equal(parsed.options.gameId, "42");
   assert.equal(parsed.options.levelId, "factory");
   assert.equal(parsed.options.image, "factory.png");
@@ -609,12 +651,14 @@ test("resolveMapPlan builds single map upload from flags", async () => {
     },
     {
       TESTING_FLOOR_API_TOKEN: "tf_test",
+      TESTING_FLOOR_ORGANIZATION_ID: "gamedepartment",
       TESTING_FLOOR_VERSION: "0.4.12"
     },
     cwd
   );
 
   assert.equal(plan.apiUrl, "https://testingfloor.com");
+  assert.equal(plan.organizationId, "gamedepartment");
   assert.equal(plan.gameId, "42");
   assert.equal(plan.token, "tf_test");
   assert.equal(plan.maps.length, 1);
@@ -637,6 +681,7 @@ test("resolveMapPlan supports config maps relative to config file", async () => 
   await writeFile(
     path.join(configDir, "testingfloor-maps.json"),
     JSON.stringify({
+      organizationId: "gamedepartment",
       gameId: 42,
       appVersion: "0.4.12",
       maps: [
@@ -656,6 +701,7 @@ test("resolveMapPlan supports config maps relative to config file", async () => 
   );
 
   assert.equal(plan.maps.length, 1);
+  assert.equal(plan.organizationId, "gamedepartment");
   assert.equal(plan.maps[0].imagePath, path.join(cwd, "factory.png"));
   assert.equal(plan.maps[0].appVersion, "0.4.12");
 });
@@ -673,6 +719,7 @@ test("resolveMapPlan rejects mismatched axes and missing fields", async () => {
           horizontalAxis: "x",
           image: "factory.png",
           levelId: "factory",
+          organizationId: "gamedepartment",
           verticalAxis: "x"
         },
         { TESTING_FLOOR_API_TOKEN: "tf_test" },
@@ -684,11 +731,28 @@ test("resolveMapPlan rejects mismatched axes and missing fields", async () => {
   await assert.rejects(
     () =>
       resolveMapPlan(
-        { gameId: "42", levelId: "factory", image: "factory.png" },
+        { gameId: "42", levelId: "factory", image: "factory.png", organizationId: "gamedepartment" },
         { TESTING_FLOOR_API_TOKEN: "tf_test" },
         cwd
       ),
     /Missing bounds/
+  );
+});
+
+test("resolveMapPlan requires an organization id", async () => {
+  await assert.rejects(
+    () =>
+      resolveMapPlan(
+        {
+          bounds: "0,0,200,200",
+          gameId: "42",
+          image: "factory.png",
+          levelId: "factory"
+        },
+        { TESTING_FLOOR_API_TOKEN: "tf_test" },
+        process.cwd()
+      ),
+    /Missing organization id/
   );
 });
 
@@ -701,7 +765,7 @@ test("uploadMap posts multipart form data and returns the created map", async (t
   let receivedAuth = null;
   let receivedContentType = null;
   const server = http.createServer(async (request, response) => {
-    if (request.method === "POST" && request.url === "/api/games/42/maps") {
+    if (request.method === "POST" && request.url === "/api/organizations/gamedepartment/games/42/maps") {
       receivedAuth = request.headers["authorization"];
       receivedContentType = request.headers["content-type"];
       receivedBody = await readRequestBody(request);
@@ -727,7 +791,7 @@ test("uploadMap posts multipart form data and returns the created map", async (t
   t.after(() => server.close());
 
   const result = await uploadMap(
-    { apiUrl: serverUrl(server), gameId: "42", token: "tf_test" },
+    { apiUrl: serverUrl(server), organizationId: "gamedepartment", gameId: "42", token: "tf_test" },
     {
       levelId: "factory",
       imagePath,
@@ -761,6 +825,7 @@ test("uploadMap posts multipart form data and returns the created map", async (t
 test("readMapInputs assembles bounds from four scalar inputs", () => {
   const inputs = readMapInputs({
     "INPUT_API-TOKEN": "tf_test",
+    "INPUT_ORGANIZATION-ID": "gamedepartment",
     "INPUT_GAME-ID": "42",
     "INPUT_LEVEL-ID": "factory",
     INPUT_IMAGE: "factory.png",
@@ -771,6 +836,7 @@ test("readMapInputs assembles bounds from four scalar inputs", () => {
   });
 
   assert.equal(inputs.token, "tf_test");
+  assert.equal(inputs.organizationId, "gamedepartment");
   assert.equal(inputs.gameId, "42");
   assert.equal(inputs.levelId, "factory");
   assert.equal(inputs.image, "factory.png");
@@ -780,6 +846,7 @@ test("readMapInputs assembles bounds from four scalar inputs", () => {
 test("readMapInputs prefers single bounds string when provided", () => {
   const inputs = readMapInputs({
     "INPUT_API-TOKEN": "tf_test",
+    "INPUT_ORGANIZATION-ID": "gamedepartment",
     "INPUT_GAME-ID": "42",
     "INPUT_LEVEL-ID": "factory",
     INPUT_IMAGE: "factory.png",

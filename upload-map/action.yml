@@ -13,6 +13,9 @@ inputs:
   game-id:
     description: Numeric Testing Floor game id.
     required: true
+  organization-id:
+    description: Testing Floor organization slug or numeric id. Can also be set with TESTING_FLOOR_ORGANIZATION_ID.
+    required: false
   level-id:
     description: Level identifier the map belongs to.
     required: true

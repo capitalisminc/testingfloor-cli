@@ -1,6 +1,6 @@
 import process from "node:process";
 
-import { input, requiredInput, writeOutput } from "./action-core.js";
+import { input, requiredInput, writeOutput } from "./action-io.js";
 import { resolveMapPlan, uploadMap } from "./cli.js";
 
 export async function runMapAction(env = process.env, cwd = process.cwd()) {
@@ -25,6 +25,7 @@ export function readMapInputs(env) {
     horizontalAxis: input(env, "horizontal-axis") || undefined,
     image: requiredInput(env, "image"),
     levelId: requiredInput(env, "level-id"),
+    organizationId: input(env, "organization-id") || undefined,
     token: requiredInput(env, "api-token"),
     verticalAxis: input(env, "vertical-axis") || undefined
   };

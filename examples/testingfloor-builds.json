@@ -1,4 +1,5 @@
 {
+  "organizationId": "gamedepartment",
   "gameId": 42,
   "version": "0.4.12",
   "gitSha": "abc123",

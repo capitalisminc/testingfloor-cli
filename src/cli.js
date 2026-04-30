@@ -33,6 +33,7 @@ const VALUE_OPTIONS = new Set([
   "image",
   "launch-path",
   "level-id",
+  "organization-id",
   "platform",
   "source-ref-json",
   "token",
@@ -138,6 +139,12 @@ export async function resolveUploadPlan(options, env = {}, cwd = process.cwd()) 
     firstPresent(options.apiUrl, env.TESTING_FLOOR_API_URL, config.apiUrl, DEFAULT_API_URL)
   );
   const token = firstPresent(options.token, env.TESTING_FLOOR_API_TOKEN, config.token);
+  const organizationId = firstPresent(
+    options.organizationId,
+    env.TESTING_FLOOR_ORGANIZATION_ID,
+    config.organizationId,
+    config.organization_id
+  );
   const butlerPath = firstPresent(
     options.butlerPath,
     env.TESTING_FLOOR_BUTLER_PATH,
@@ -166,12 +173,13 @@ export async function resolveUploadPlan(options, env = {}, cwd = process.cwd()) 
     })
   );
 
-  validatePlan({ apiUrl, token, gameId, builds });
+  validatePlan({ apiUrl, token, organizationId, gameId, builds });
 
   return {
     apiUrl,
     butlerPath,
     token,
+    organizationId: String(organizationId),
     gameId: String(gameId),
     builds
   };
@@ -192,6 +200,12 @@ export async function resolveMapPlan(options, env = {}, cwd = process.cwd()) {
     firstPresent(options.apiUrl, env.TESTING_FLOOR_API_URL, config.apiUrl, DEFAULT_API_URL)
   );
   const token = firstPresent(options.token, env.TESTING_FLOOR_API_TOKEN, config.token);
+  const organizationId = firstPresent(
+    options.organizationId,
+    env.TESTING_FLOOR_ORGANIZATION_ID,
+    config.organizationId,
+    config.organization_id
+  );
   const gameId = firstPresent(options.gameId, env.TESTING_FLOOR_GAME_ID, config.gameId);
   const appVersion = firstPresent(
     options.appVersion,
@@ -205,11 +219,12 @@ export async function resolveMapPlan(options, env = {}, cwd = process.cwd()) {
     normalizeMap(map, { configDir, cwd, commonAppVersion: appVersion })
   );
 
-  validateMapPlan({ apiUrl, token, gameId, maps });
+  validateMapPlan({ apiUrl, token, organizationId, gameId, maps });
 
   return {
     apiUrl,
     token,
+    organizationId: String(organizationId),
     gameId: String(gameId),
     maps
   };
@@ -263,7 +278,7 @@ export async function uploadMap(plan, map, { log = console.error } = {}) {
   const imageBlob = new Blob([imageBytes], { type: map.imageMimeType });
   formData.append("image", imageBlob, map.imageFilename);
 
-  const response = await postFormData(`${plan.apiUrl}/api/games/${plan.gameId}/maps`, plan.token, formData);
+  const response = await postFormData(gameApiUrl(plan, "/maps"), plan.token, formData);
 
   return {
     id: response.id,
@@ -312,6 +327,12 @@ function normalizeMap(map, { configDir, cwd, commonAppVersion }) {
 function validateMapPlan(plan) {
   if (!plan.token) {
     throw new Error("Missing API token. Set TESTING_FLOOR_API_TOKEN or pass --token.");
+  }
+
+  if (!plan.organizationId) {
+    throw new Error(
+      "Missing organization id. Set organizationId in config, TESTING_FLOOR_ORGANIZATION_ID, or pass --organization-id."
+    );
   }
 
   if (!plan.gameId || !/^\d+$/.test(String(plan.gameId))) {
@@ -420,7 +441,7 @@ export async function uploadBuild(plan, build, { log = console.error } = {}) {
   log(`Creating ${build.platform} build from ${build.archivePath}`);
   const hashes = await hashFile(build.archivePath);
 
-  const createResponse = await postJson(`${plan.apiUrl}/api/games/${plan.gameId}/builds`, plan.token, {
+  const createResponse = await postJson(gameApiUrl(plan, "/builds"), plan.token, {
     platform: build.platform,
     version: build.version,
     git_sha: build.gitSha,
@@ -498,7 +519,7 @@ async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
     const patchHashes = await hashFile(patchPath);
     const signatureHashes = await hashFile(signaturePath);
 
-    const createResponse = await postJson(`${plan.apiUrl}/api/games/${plan.gameId}/builds`, plan.token, {
+    const createResponse = await postJson(gameApiUrl(plan, "/builds"), plan.token, {
       platform: build.platform,
       version: build.version,
       git_sha: build.gitSha,
@@ -558,7 +579,7 @@ async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
 
 async function fetchWharfBase(plan, build) {
   const response = await getJson(
-    `${plan.apiUrl}/api/games/${plan.gameId}/builds/wharf/base?platform=${encodeURIComponent(build.platform)}`,
+    gameApiUrl(plan, `/builds/wharf/base?platform=${encodeURIComponent(build.platform)}`),
     plan.token
   );
   return {
@@ -688,6 +709,12 @@ function normalizeLaunchArgs(value) {
 function validatePlan(plan) {
   if (!plan.token) {
     throw new Error("Missing API token. Set TESTING_FLOOR_API_TOKEN or pass --token.");
+  }
+
+  if (!plan.organizationId) {
+    throw new Error(
+      "Missing organization id. Set organizationId in config, TESTING_FLOOR_ORGANIZATION_ID, or pass --organization-id."
+    );
   }
 
   if (!plan.gameId || !/^\d+$/.test(String(plan.gameId))) {
@@ -997,6 +1024,12 @@ function normalizeApiUrl(raw) {
   return url.toString().replace(/\/$/, "");
 }
 
+function gameApiUrl(plan, suffix) {
+  const organizationId = encodeURIComponent(plan.organizationId);
+  const gameId = encodeURIComponent(plan.gameId);
+  return `${plan.apiUrl}/api/organizations/${organizationId}/games/${gameId}${suffix}`;
+}
+
 function firstPresent(...values) {
   return values.find((value) => value !== undefined && value !== null && value !== "");
 }
@@ -1030,18 +1063,19 @@ function helpText() {
   return `Testing Floor CLI
 
 Usage:
-  testingfloor upload-build --game-id 42 --platform windows --archive ./game-windows.zip --version 0.4.12 --launch-path Game.exe
+  testingfloor upload-build --organization-id gamedepartment --game-id 42 --platform windows --archive ./game-windows.zip --version 0.4.12 --launch-path Game.exe
   testingfloor upload-build --config testingfloor-builds.json
-  testingfloor upload-map --game-id 42 --level-id factory --image ./maps/factory.png --bounds 0,0,200,200
+  testingfloor upload-map --organization-id gamedepartment --game-id 42 --level-id factory --image ./maps/factory.png --bounds 0,0,200,200
   testingfloor upload-map --config testingfloor-maps.json
 
 Environment:
-  TESTING_FLOOR_API_TOKEN   API key (builds:create or maps:sync scope)
-  TESTING_FLOOR_API_URL     Defaults to ${DEFAULT_API_URL}
-  TESTING_FLOOR_GAME_ID     Numeric game id
-  TESTING_FLOOR_VERSION     Build version / map app_version metadata
-  TESTING_FLOOR_GIT_SHA     Git SHA metadata (builds)
-  TESTING_FLOOR_BUTLER_PATH Path to butler for wharf uploads
+  TESTING_FLOOR_API_TOKEN       API key (builds:create or maps:sync scope)
+  TESTING_FLOOR_API_URL         Defaults to ${DEFAULT_API_URL}
+  TESTING_FLOOR_ORGANIZATION_ID Organization slug or numeric id
+  TESTING_FLOOR_GAME_ID         Numeric game id
+  TESTING_FLOOR_VERSION         Build version / map app_version metadata
+  TESTING_FLOOR_GIT_SHA         Git SHA metadata (builds)
+  TESTING_FLOOR_BUTLER_PATH     Path to butler for wharf uploads
 
 Build options:
   --platform <platform>     windows, macos, or linux
@@ -1067,6 +1101,7 @@ Map options:
 Common options:
   --api-url <url>           Testing Floor base URL
   --token <token>           API token
+  --organization-id <id>    Organization slug or numeric id
   --game-id <id>            Numeric Testing Floor game id
   --config, -c <path>       JSON config with builds, platforms, or maps
   --json                    Print only JSON results

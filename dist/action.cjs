@@ -22365,7 +22365,7 @@ var require_utils2 = __commonJS({
 var require_end_of_stream = __commonJS({
   "node_modules/readable-stream/lib/internal/streams/end-of-stream.js"(exports2, module2) {
     "use strict";
-    var process4 = require_process();
+    var process5 = require_process();
     var { AbortError, codes } = require_errors2();
     var { ERR_INVALID_ARG_TYPE, ERR_STREAM_PREMATURE_CLOSE } = codes;
     var { kEmptyObject, once } = require_util9();
@@ -22501,17 +22501,17 @@ var require_end_of_stream = __commonJS({
       }
       stream2.on("close", onclose);
       if (closed) {
-        process4.nextTick(onclose);
+        process5.nextTick(onclose);
       } else if (wState !== null && wState !== void 0 && wState.errorEmitted || rState !== null && rState !== void 0 && rState.errorEmitted) {
         if (!willEmitClose) {
-          process4.nextTick(onclosed);
+          process5.nextTick(onclosed);
         }
       } else if (!readable && (!willEmitClose || isReadable(stream2)) && (writableFinished || isWritable(stream2) === false)) {
-        process4.nextTick(onclosed);
+        process5.nextTick(onclosed);
       } else if (!writable && (!willEmitClose || isWritable(stream2)) && (readableFinished || isReadable(stream2) === false)) {
-        process4.nextTick(onclosed);
+        process5.nextTick(onclosed);
       } else if (rState && stream2.req && stream2.aborted) {
-        process4.nextTick(onclosed);
+        process5.nextTick(onclosed);
       }
       const cleanup = () => {
         callback = nop;
@@ -22539,7 +22539,7 @@ var require_end_of_stream = __commonJS({
           );
         };
         if (options.signal.aborted) {
-          process4.nextTick(abort);
+          process5.nextTick(abort);
         } else {
           addAbortListener = addAbortListener || require_util9().addAbortListener;
           const disposable = addAbortListener(options.signal, abort);
@@ -22566,7 +22566,7 @@ var require_end_of_stream = __commonJS({
           );
         };
         if (options.signal.aborted) {
-          process4.nextTick(abort);
+          process5.nextTick(abort);
         } else {
           addAbortListener = addAbortListener || require_util9().addAbortListener;
           const disposable = addAbortListener(options.signal, abort);
@@ -22579,7 +22579,7 @@ var require_end_of_stream = __commonJS({
       }
       const resolverFn = (...args) => {
         if (!isAborted) {
-          process4.nextTick(() => callback.apply(stream2, args));
+          process5.nextTick(() => callback.apply(stream2, args));
         }
       };
       PromisePrototypeThen(stream2[kIsClosedPromise].promise, resolverFn, resolverFn);
@@ -22617,7 +22617,7 @@ var require_end_of_stream = __commonJS({
 var require_destroy = __commonJS({
   "node_modules/readable-stream/lib/internal/streams/destroy.js"(exports2, module2) {
     "use strict";
-    var process4 = require_process();
+    var process5 = require_process();
     var {
       aggregateTwoErrors,
       codes: { ERR_MULTIPLE_CALLBACK },
@@ -22684,9 +22684,9 @@ var require_destroy = __commonJS({
           cb(err2);
         }
         if (err2) {
-          process4.nextTick(emitErrorCloseNT, self, err2);
+          process5.nextTick(emitErrorCloseNT, self, err2);
         } else {
-          process4.nextTick(emitCloseNT, self);
+          process5.nextTick(emitCloseNT, self);
         }
       }
       try {
@@ -22771,7 +22771,7 @@ var require_destroy = __commonJS({
           r.errored = err;
         }
         if (sync) {
-          process4.nextTick(emitErrorNT, stream2, err);
+          process5.nextTick(emitErrorNT, stream2, err);
         } else {
           emitErrorNT(stream2, err);
         }
@@ -22793,7 +22793,7 @@ var require_destroy = __commonJS({
       if (stream2.listenerCount(kConstruct) > 1) {
         return;
       }
-      process4.nextTick(constructNT, stream2);
+      process5.nextTick(constructNT, stream2);
     }
     function constructNT(stream2) {
       let called = false;
@@ -22817,15 +22817,15 @@ var require_destroy = __commonJS({
         } else if (err) {
           errorOrDestroy(stream2, err, true);
         } else {
-          process4.nextTick(emitConstructNT, stream2);
+          process5.nextTick(emitConstructNT, stream2);
         }
       }
       try {
         stream2._construct((err) => {
-          process4.nextTick(onConstruct, err);
+          process5.nextTick(onConstruct, err);
         });
       } catch (err) {
-        process4.nextTick(onConstruct, err);
+        process5.nextTick(onConstruct, err);
       }
     }
     function emitConstructNT(stream2) {
@@ -22839,7 +22839,7 @@ var require_destroy = __commonJS({
     }
     function emitErrorCloseLegacy(stream2, err) {
       stream2.emit("error", err);
-      process4.nextTick(emitCloseLegacy, stream2);
+      process5.nextTick(emitCloseLegacy, stream2);
     }
     function destroyer(stream2, err) {
       if (!stream2 || isDestroyed(stream2)) {
@@ -22860,9 +22860,9 @@ var require_destroy = __commonJS({
       } else if (typeof stream2.close === "function") {
         stream2.close();
       } else if (err) {
-        process4.nextTick(emitErrorCloseLegacy, stream2, err);
+        process5.nextTick(emitErrorCloseLegacy, stream2, err);
       } else {
-        process4.nextTick(emitCloseLegacy, stream2);
+        process5.nextTick(emitCloseLegacy, stream2);
       }
       if (!stream2.destroyed) {
         stream2[kIsDestroyed] = true;
@@ -23504,7 +23504,7 @@ var require_string_decoder = __commonJS({
 var require_from = __commonJS({
   "node_modules/readable-stream/lib/internal/streams/from.js"(exports2, module2) {
     "use strict";
-    var process4 = require_process();
+    var process5 = require_process();
     var { PromisePrototypeThen, SymbolAsyncIterator, SymbolIterator } = require_primordials();
     var { Buffer: Buffer2 } = require("buffer");
     var { ERR_INVALID_ARG_TYPE, ERR_STREAM_NULL_VALUES } = require_errors2().codes;
@@ -23546,9 +23546,9 @@ var require_from = __commonJS({
       readable._destroy = function(error, cb) {
         PromisePrototypeThen(
           close(error),
-          () => process4.nextTick(cb, error),
+          () => process5.nextTick(cb, error),
           // nextTick is here in case cb throws
-          (e) => process4.nextTick(cb, e || error)
+          (e) => process5.nextTick(cb, e || error)
         );
       };
       async function close(error) {
@@ -23599,7 +23599,7 @@ var require_from = __commonJS({
 var require_readable2 = __commonJS({
   "node_modules/readable-stream/lib/internal/streams/readable.js"(exports2, module2) {
     "use strict";
-    var process4 = require_process();
+    var process5 = require_process();
     var {
       ArrayPrototypeIndexOf,
       NumberIsInteger,
@@ -23984,7 +23984,7 @@ var require_readable2 = __commonJS({
       if (!state.emittedReadable) {
         debug2("emitReadable", state.flowing);
         state.emittedReadable = true;
-        process4.nextTick(emitReadable_, stream2);
+        process5.nextTick(emitReadable_, stream2);
       }
     }
     function emitReadable_(stream2) {
@@ -24000,7 +24000,7 @@ var require_readable2 = __commonJS({
     function maybeReadMore(stream2, state) {
       if (!state.readingMore && state.constructed) {
         state.readingMore = true;
-        process4.nextTick(maybeReadMore_, stream2, state);
+        process5.nextTick(maybeReadMore_, stream2, state);
       }
     }
     function maybeReadMore_(stream2, state) {
@@ -24027,9 +24027,9 @@ var require_readable2 = __commonJS({
       }
       state.pipes.push(dest);
       debug2("pipe count=%d opts=%j", state.pipes.length, pipeOpts);
-      const doEnd = (!pipeOpts || pipeOpts.end !== false) && dest !== process4.stdout && dest !== process4.stderr;
+      const doEnd = (!pipeOpts || pipeOpts.end !== false) && dest !== process5.stdout && dest !== process5.stderr;
       const endFn = doEnd ? onend : unpipe;
-      if (state.endEmitted) process4.nextTick(endFn);
+      if (state.endEmitted) process5.nextTick(endFn);
       else src.once("end", endFn);
       dest.on("unpipe", onunpipe);
       function onunpipe(readable, unpipeInfo) {
@@ -24179,7 +24179,7 @@ var require_readable2 = __commonJS({
           if (state.length) {
             emitReadable(this);
           } else if (!state.reading) {
-            process4.nextTick(nReadingNextTick, this);
+            process5.nextTick(nReadingNextTick, this);
           }
         }
       }
@@ -24189,7 +24189,7 @@ var require_readable2 = __commonJS({
     Readable.prototype.removeListener = function(ev, fn) {
       const res = Stream.prototype.removeListener.call(this, ev, fn);
       if (ev === "readable") {
-        process4.nextTick(updateReadableListening, this);
+        process5.nextTick(updateReadableListening, this);
       }
       return res;
     };
@@ -24197,7 +24197,7 @@ var require_readable2 = __commonJS({
     Readable.prototype.removeAllListeners = function(ev) {
       const res = Stream.prototype.removeAllListeners.apply(this, arguments);
       if (ev === "readable" || ev === void 0) {
-        process4.nextTick(updateReadableListening, this);
+        process5.nextTick(updateReadableListening, this);
       }
       return res;
     };
@@ -24229,7 +24229,7 @@ var require_readable2 = __commonJS({
     function resume(stream2, state) {
       if (!state.resumeScheduled) {
         state.resumeScheduled = true;
-        process4.nextTick(resume_, stream2, state);
+        process5.nextTick(resume_, stream2, state);
       }
     }
     function resume_(stream2, state) {
@@ -24506,7 +24506,7 @@ var require_readable2 = __commonJS({
       debug2("endReadable", state.endEmitted);
       if (!state.endEmitted) {
         state.ended = true;
-        process4.nextTick(endReadableNT, state, stream2);
+        process5.nextTick(endReadableNT, state, stream2);
       }
     }
     function endReadableNT(state, stream2) {
@@ -24515,7 +24515,7 @@ var require_readable2 = __commonJS({
         state.endEmitted = true;
         stream2.emit("end");
         if (stream2.writable && stream2.allowHalfOpen === false) {
-          process4.nextTick(endWritableNT, stream2);
+          process5.nextTick(endWritableNT, stream2);
         } else if (state.autoDestroy) {
           const wState = stream2._writableState;
           const autoDestroy = !wState || wState.autoDestroy && // We don't expect the writable to ever 'finish'
@@ -24565,7 +24565,7 @@ var require_readable2 = __commonJS({
 var require_writable = __commonJS({
   "node_modules/readable-stream/lib/internal/streams/writable.js"(exports2, module2) {
     "use strict";
-    var process4 = require_process();
+    var process5 = require_process();
     var {
       ArrayPrototypeSlice,
       Error: Error2,
@@ -24718,7 +24718,7 @@ var require_writable = __commonJS({
         err = new ERR_STREAM_DESTROYED("write");
       }
       if (err) {
-        process4.nextTick(cb, err);
+        process5.nextTick(cb, err);
         errorOrDestroy(stream2, err, true);
         return err;
       }
@@ -24808,7 +24808,7 @@ var require_writable = __commonJS({
           stream2._readableState.errored = er;
         }
         if (sync) {
-          process4.nextTick(onwriteError, stream2, state, er, cb);
+          process5.nextTick(onwriteError, stream2, state, er, cb);
         } else {
           onwriteError(stream2, state, er, cb);
         }
@@ -24826,7 +24826,7 @@ var require_writable = __commonJS({
               stream: stream2,
               state
             };
-            process4.nextTick(afterWriteTick, state.afterWriteTickInfo);
+            process5.nextTick(afterWriteTick, state.afterWriteTickInfo);
           }
         } else {
           afterWrite(stream2, state, 1, cb);
@@ -24963,7 +24963,7 @@ var require_writable = __commonJS({
       }
       if (typeof cb === "function") {
         if (err || state.finished) {
-          process4.nextTick(cb, err);
+          process5.nextTick(cb, err);
         } else {
           state[kOnFinished].push(cb);
         }
@@ -24992,7 +24992,7 @@ var require_writable = __commonJS({
           state.prefinished = true;
           stream2.emit("prefinish");
           state.pendingcb++;
-          process4.nextTick(finish, stream2, state);
+          process5.nextTick(finish, stream2, state);
         }
       }
       state.sync = true;
@@ -25021,7 +25021,7 @@ var require_writable = __commonJS({
         if (state.pendingcb === 0) {
           if (sync) {
             state.pendingcb++;
-            process4.nextTick(
+            process5.nextTick(
               (stream3, state2) => {
                 if (needFinish(state2)) {
                   finish(stream3, state2);
@@ -25156,7 +25156,7 @@ var require_writable = __commonJS({
     Writable.prototype.destroy = function(err, cb) {
       const state = this._writableState;
       if (!state.destroyed && (state.bufferedIndex < state.buffered.length || state[kOnFinished].length)) {
-        process4.nextTick(errorBuffer, state);
+        process5.nextTick(errorBuffer, state);
       }
       destroy.call(this, err, cb);
       return this;
@@ -25185,7 +25185,7 @@ var require_writable = __commonJS({
 // node_modules/readable-stream/lib/internal/streams/duplexify.js
 var require_duplexify = __commonJS({
   "node_modules/readable-stream/lib/internal/streams/duplexify.js"(exports2, module2) {
-    var process4 = require_process();
+    var process5 = require_process();
     var bufferModule = require("buffer");
     var {
       isReadable,
@@ -25298,9 +25298,9 @@ var require_duplexify = __commonJS({
               final(async () => {
                 try {
                   await promise;
-                  process4.nextTick(cb, null);
+                  process5.nextTick(cb, null);
                 } catch (err) {
-                  process4.nextTick(cb, err);
+                  process5.nextTick(cb, err);
                 }
               });
             },
@@ -25379,7 +25379,7 @@ var require_duplexify = __commonJS({
             const _promise = promise;
             promise = null;
             const { chunk, done, cb } = await _promise;
-            process4.nextTick(cb);
+            process5.nextTick(cb);
             if (done) return;
             if (signal.aborted)
               throw new AbortError(void 0, {
@@ -25770,7 +25770,7 @@ var require_passthrough = __commonJS({
 // node_modules/readable-stream/lib/internal/streams/pipeline.js
 var require_pipeline = __commonJS({
   "node_modules/readable-stream/lib/internal/streams/pipeline.js"(exports2, module2) {
-    var process4 = require_process();
+    var process5 = require_process();
     var { ArrayIsArray, Promise: Promise2, SymbolAsyncIterator, SymbolDispose } = require_primordials();
     var eos = require_end_of_stream();
     var { once } = require_util9();
@@ -25972,7 +25972,7 @@ var require_pipeline = __commonJS({
           if (!error) {
             lastStreamCleanup.forEach((fn) => fn());
           }
-          process4.nextTick(callback, error, value);
+          process5.nextTick(callback, error, value);
         }
       }
       let ret;
@@ -26051,11 +26051,11 @@ var require_pipeline = __commonJS({
                   if (end) {
                     pt.end();
                   }
-                  process4.nextTick(finish);
+                  process5.nextTick(finish);
                 },
                 (err) => {
                   pt.destroy(err);
-                  process4.nextTick(finish, err);
+                  process5.nextTick(finish, err);
                 }
               );
             } else if (isIterable(ret, true)) {
@@ -26136,7 +26136,7 @@ var require_pipeline = __commonJS({
         }
       }
       if (signal !== null && signal !== void 0 && signal.aborted || outerSignal !== null && outerSignal !== void 0 && outerSignal.aborted) {
-        process4.nextTick(abort);
+        process5.nextTick(abort);
       }
       return ret;
     }
@@ -26157,7 +26157,7 @@ var require_pipeline = __commonJS({
         };
         var endFn = endFn2;
         if (isReadableFinished(src)) {
-          process4.nextTick(endFn2);
+          process5.nextTick(endFn2);
         } else {
           src.once("end", endFn2);
         }
@@ -27117,11 +27117,11 @@ var require_crc32 = __commonJS({
 });
 
 // src/action-core.js
-var import_node_fs2 = require("node:fs");
+var import_node_fs3 = require("node:fs");
 var import_promises2 = require("node:fs/promises");
 var import_node_os2 = __toESM(require("node:os"), 1);
 var import_node_path2 = __toESM(require("node:path"), 1);
-var import_node_process2 = __toESM(require("node:process"), 1);
+var import_node_process3 = __toESM(require("node:process"), 1);
 var import_promises3 = require("node:stream/promises");
 
 // node_modules/@actions/core/lib/command.js
@@ -30259,22 +30259,22 @@ var ZipArchiveOutputStream = class extends ArchiveOutputStream {
   }
   _smartStream(ae, callback) {
     var deflate = ae.getMethod() === METHOD_DEFLATED;
-    var process4 = deflate ? new DeflateCRC32Stream(this.options.zlib) : new CRC32Stream();
+    var process5 = deflate ? new DeflateCRC32Stream(this.options.zlib) : new CRC32Stream();
     var error = null;
     function handleStuff() {
-      var digest = process4.digest().readUInt32BE(0);
+      var digest = process5.digest().readUInt32BE(0);
       ae.setCrc(digest);
-      ae.setSize(process4.size());
-      ae.setCompressedSize(process4.size(true));
+      ae.setSize(process5.size());
+      ae.setCompressedSize(process5.size(true));
       this._afterAppend(ae);
       callback(error, ae);
     }
-    process4.once("end", handleStuff.bind(this));
-    process4.once("error", function(err) {
+    process5.once("end", handleStuff.bind(this));
+    process5.once("error", function(err) {
       error = err;
     });
-    process4.pipe(this, { end: false });
-    return process4;
+    process5.pipe(this, { end: false });
+    return process5;
   }
   _writeCentralDirectoryEnd() {
     var records = this._entries.length;
@@ -30575,19 +30575,48 @@ var ZipStream = class extends ZipArchiveOutputStream {
   }
 };
 
+// src/action-io.js
+var import_node_fs = require("node:fs");
+var import_node_process = __toESM(require("node:process"), 1);
+function input(env, name) {
+  const actionName = `INPUT_${name.replaceAll(" ", "_").toUpperCase()}`;
+  const shellName = `INPUT_${name.toUpperCase().replaceAll("-", "_")}`;
+  const value = env[actionName] ?? env[shellName];
+  return value === void 0 || value === "" ? null : value;
+}
+function requiredInput(env, name) {
+  const value = input(env, name);
+  if (!value) {
+    throw new Error(`Missing required input: ${name}`);
+  }
+  return value;
+}
+function writeOutput(name, value, env) {
+  if (value === void 0 || value === null) {
+    return;
+  }
+  if (env.GITHUB_OUTPUT) {
+    (0, import_node_fs.appendFileSync)(env.GITHUB_OUTPUT, `${name}=${value}
+`);
+    return;
+  }
+  import_node_process.default.stdout.write(`${name}=${value}
+`);
+}
+
 // src/cli.js
 var import_node_crypto = require("node:crypto");
 var import_node_child_process = require("node:child_process");
-var import_node_fs = require("node:fs");
+var import_node_fs2 = require("node:fs");
 var import_promises = require("node:fs/promises");
 var import_node_http = __toESM(require("node:http"), 1);
 var import_node_https = __toESM(require("node:https"), 1);
 var import_node_os = __toESM(require("node:os"), 1);
 var import_node_path = __toESM(require("node:path"), 1);
-var import_node_process = __toESM(require("node:process"), 1);
+var import_node_process2 = __toESM(require("node:process"), 1);
 var DEFAULT_API_URL = "https://testingfloor.com";
 var PLATFORMS = /* @__PURE__ */ new Set(["windows", "macos", "linux"]);
-async function resolveUploadPlan(options, env = {}, cwd = import_node_process.default.cwd()) {
+async function resolveUploadPlan(options, env = {}, cwd = import_node_process2.default.cwd()) {
   const configPath = options.config ? import_node_path.default.resolve(cwd, options.config) : null;
   const config = configPath ? await readJson(configPath) : {};
   const configDir = configPath ? import_node_path.default.dirname(configPath) : cwd;
@@ -30600,6 +30629,12 @@ async function resolveUploadPlan(options, env = {}, cwd = import_node_process.de
     firstPresent(options.apiUrl, env.TESTING_FLOOR_API_URL, config.apiUrl, DEFAULT_API_URL)
   );
   const token = firstPresent(options.token, env.TESTING_FLOOR_API_TOKEN, config.token);
+  const organizationId = firstPresent(
+    options.organizationId,
+    env.TESTING_FLOOR_ORGANIZATION_ID,
+    config.organizationId,
+    config.organization_id
+  );
   const butlerPath = firstPresent(
     options.butlerPath,
     env.TESTING_FLOOR_BUTLER_PATH,
@@ -30626,11 +30661,12 @@ async function resolveUploadPlan(options, env = {}, cwd = import_node_process.de
       commonSourceRef: sourceRef
     })
   );
-  validatePlan({ apiUrl, token, gameId, builds });
+  validatePlan({ apiUrl, token, organizationId, gameId, builds });
   return {
     apiUrl,
     butlerPath,
     token,
+    organizationId: String(organizationId),
     gameId: String(gameId),
     builds
   };
@@ -30665,7 +30701,7 @@ async function uploadBuild(plan, build, { log = console.error } = {}) {
   const file = await fileInfo(build.archivePath);
   log(`Creating ${build.platform} build from ${build.archivePath}`);
   const hashes = await hashFile(build.archivePath);
-  const createResponse = await postJson(`${plan.apiUrl}/api/games/${plan.gameId}/builds`, plan.token, {
+  const createResponse = await postJson(gameApiUrl(plan, "/builds"), plan.token, {
     platform: build.platform,
     version: build.version,
     git_sha: build.gitSha,
@@ -30733,7 +30769,7 @@ async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
     const signature = await fileInfo(signaturePath);
     const patchHashes = await hashFile(patchPath);
     const signatureHashes = await hashFile(signaturePath);
-    const createResponse = await postJson(`${plan.apiUrl}/api/games/${plan.gameId}/builds`, plan.token, {
+    const createResponse = await postJson(gameApiUrl(plan, "/builds"), plan.token, {
       platform: build.platform,
       version: build.version,
       git_sha: build.gitSha,
@@ -30789,7 +30825,7 @@ async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
 }
 async function fetchWharfBase(plan, build) {
   const response = await getJson(
-    `${plan.apiUrl}/api/games/${plan.gameId}/builds/wharf/base?platform=${encodeURIComponent(build.platform)}`,
+    gameApiUrl(plan, `/builds/wharf/base?platform=${encodeURIComponent(build.platform)}`),
     plan.token
   );
   return {
@@ -30903,6 +30939,11 @@ function validatePlan(plan) {
   if (!plan.token) {
     throw new Error("Missing API token. Set TESTING_FLOOR_API_TOKEN or pass --token.");
   }
+  if (!plan.organizationId) {
+    throw new Error(
+      "Missing organization id. Set organizationId in config, TESTING_FLOOR_ORGANIZATION_ID, or pass --organization-id."
+    );
+  }
   if (!plan.gameId || !/^\d+$/.test(String(plan.gameId))) {
     throw new Error("Missing numeric game id. Set gameId in config or pass --game-id.");
   }
@@ -30974,7 +31015,7 @@ async function hashFile(filePath) {
   const md5 = (0, import_node_crypto.createHash)("md5");
   const sha256 = (0, import_node_crypto.createHash)("sha256");
   await new Promise((resolve2, reject) => {
-    const stream2 = (0, import_node_fs.createReadStream)(filePath);
+    const stream2 = (0, import_node_fs2.createReadStream)(filePath);
     stream2.on("data", (chunk) => {
       md5.update(chunk);
       sha256.update(chunk);
@@ -31077,7 +31118,7 @@ function uploadFile(uploadUrl, uploadHeaders, filePath, size, { start, end, labe
       });
     });
     request.on("error", reject);
-    (0, import_node_fs.createReadStream)(filePath, streamOptions({ start, end })).on("error", reject).pipe(request);
+    (0, import_node_fs2.createReadStream)(filePath, streamOptions({ start, end })).on("error", reject).pipe(request);
   });
 }
 function compactHeaders(headers) {
@@ -31145,6 +31186,11 @@ function normalizeApiUrl(raw) {
   url.hash = "";
   return url.toString().replace(/\/$/, "");
 }
+function gameApiUrl(plan, suffix) {
+  const organizationId = encodeURIComponent(plan.organizationId);
+  const gameId = encodeURIComponent(plan.gameId);
+  return `${plan.apiUrl}/api/organizations/${organizationId}/games/${gameId}${suffix}`;
+}
 function firstPresent(...values) {
   return values.find((value) => value !== void 0 && value !== null && value !== "");
 }
@@ -31160,7 +31206,7 @@ function formatBytes(bytes) {
 
 // src/action-core.js
 var BUTLER_TOOL_NAME = "butler";
-async function runAction(env = import_node_process2.default.env, cwd = import_node_process2.default.cwd()) {
+async function runAction(env = import_node_process3.default.env, cwd = import_node_process3.default.cwd()) {
   const inputs = readInputs(env);
   const build = resolveActionBuild(inputs, cwd, env);
   const butlerPath = await resolveActionButlerPath({
@@ -31185,6 +31231,7 @@ async function runAction(env = import_node_process2.default.env, cwd = import_no
       gitSha: inputs.gitSha,
       launchArg: build.launchArgs,
       launchPath: build.launchPath,
+      organizationId: inputs.organizationId,
       platform: build.platform,
       sourceRefJson: JSON.stringify(inputs.sourceRef),
       token: inputs.apiToken,
@@ -31215,6 +31262,7 @@ function readInputs(env) {
     gitSha: input(env, "git-sha"),
     launchArgs: parseJsonInput(input(env, "launch-args") || "[]", "launch-args"),
     launchPath: requiredInput(env, "launch-path"),
+    organizationId: input(env, "organization-id") || void 0,
     platform: requiredInput(env, "platform"),
     sourceRef: parseJsonInput(input(env, "source-ref") || "{}", "source-ref"),
     version: requiredInput(env, "version"),
@@ -31225,7 +31273,7 @@ async function resolveActionButlerPath({
   archiveKind,
   butlerPath,
   butlerVersion = "LATEST",
-  env = import_node_process2.default.env,
+  env = import_node_process3.default.env,
   setup = setupButler
 } = {}) {
   if (archiveKind !== "wharf") {
@@ -31288,7 +31336,7 @@ function butlerArch(arch3 = import_node_os2.default.arch(), platform2 = import_n
 function isCacheableButlerVersion(version) {
   return /^\d+\.\d+\.\d+/.test(version);
 }
-function resolveActionBuild(inputs, cwd = import_node_process2.default.cwd(), env = import_node_process2.default.env) {
+function resolveActionBuild(inputs, cwd = import_node_process3.default.cwd(), env = import_node_process3.default.env) {
   if (!inputs.archive && !inputs.buildDirectory) {
     throw new Error("Set either archive or build-directory.");
   }
@@ -31334,7 +31382,7 @@ async function zipBuildDirectory({ buildDirectory, archiveName, runnerTemp = imp
 }
 async function createZipArchive({ directory, archivePath }) {
   const archive = new ZipStream({ forceZip64: true, zlib: { level: 6 } });
-  const output = (0, import_node_fs2.createWriteStream)(archivePath);
+  const output = (0, import_node_fs3.createWriteStream)(archivePath);
   archive.pipe(output);
   const archiveDone = (0, import_promises3.finished)(archive);
   const outputDone = (0, import_promises3.finished)(output);
@@ -31355,7 +31403,7 @@ async function createZipArchive({ directory, archivePath }) {
           type: "symlink"
         });
       } else {
-        await addZipEntry(archive, (0, import_node_fs2.createReadStream)(entry.fullPath), {
+        await addZipEntry(archive, (0, import_node_fs3.createReadStream)(entry.fullPath), {
           date: entry.stats.mtime,
           mode: entry.stats.mode,
           name: entry.name
@@ -31404,31 +31452,6 @@ function normalizeZipPath(value) {
 function defaultArchiveName({ env, inputs }) {
   const version = inputs.version || env.GITHUB_SHA || "build";
   return `build-${inputs.platform}-${version}.zip`;
-}
-function input(env, name) {
-  const actionName = `INPUT_${name.replaceAll(" ", "_").toUpperCase()}`;
-  const shellName = `INPUT_${name.toUpperCase().replaceAll("-", "_")}`;
-  const value = env[actionName] ?? env[shellName];
-  return value === void 0 || value === "" ? null : value;
-}
-function requiredInput(env, name) {
-  const value = input(env, name);
-  if (!value) {
-    throw new Error(`Missing required input: ${name}`);
-  }
-  return value;
-}
-function writeOutput(name, value, env) {
-  if (value === void 0 || value === null) {
-    return;
-  }
-  if (env.GITHUB_OUTPUT) {
-    (0, import_node_fs2.appendFileSync)(env.GITHUB_OUTPUT, `${name}=${value}
-`);
-    return;
-  }
-  import_node_process2.default.stdout.write(`${name}=${value}
-`);
 }
 
 // src/action.js

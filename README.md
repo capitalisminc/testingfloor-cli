@@ -25,6 +25,7 @@ export TESTING_FLOOR_API_TOKEN="tf_..."
 
 testingfloor upload-build \
   --api-url https://testingfloor.com \
+  --organization-id gamedepartment \
   --game-id 42 \
   --platform windows \
   --archive ./Builds/game-windows.zip \
@@ -41,6 +42,7 @@ Use `archiveKind: "wharf"` or `--archive-kind wharf` to upload a wharf patch and
 
 ```sh
 testingfloor upload-build \
+  --organization-id gamedepartment \
   --game-id 42 \
   --platform windows \
   --archive ./Builds/Windows \
@@ -59,6 +61,7 @@ Create `testingfloor-builds.json`:
 
 ```json
 {
+  "organizationId": "gamedepartment",
   "gameId": 42,
   "version": "0.4.12",
   "gitSha": "abc123",
@@ -99,6 +102,7 @@ Use this repository directly as a GitHub Action:
   uses: capitalisminc/testingfloor-cli@main
   with:
     api-token: ${{ secrets.TF_BUILD_UPLOAD_TOKEN }}
+    organization-id: ${{ vars.TF_ORGANIZATION_ID }}
     game-id: ${{ vars.TF_GAME_ID }}
     platform: windows
     build-directory: build/Mono/Release/${{ matrix.platform }}
@@ -147,6 +151,7 @@ The API token must include the `maps:sync` scope.
 export TESTING_FLOOR_API_TOKEN="tf_..."
 
 testingfloor upload-map \
+  --organization-id gamedepartment \
   --game-id 42 \
   --level-id factory \
   --image ./Builds/maps/factory.png \
@@ -162,6 +167,7 @@ Create `testingfloor-maps.json`:
 
 ```json
 {
+  "organizationId": "gamedepartment",
   "gameId": 42,
   "appVersion": "0.4.12",
   "maps": [
@@ -194,6 +200,7 @@ Image paths in a config file are resolved relative to that config file.
   uses: capitalisminc/testingfloor-cli/upload-map@main
   with:
     api-token: ${{ secrets.TF_MAPS_TOKEN }}
+    organization-id: ${{ vars.TF_ORGANIZATION_ID }}
     game-id: ${{ vars.TF_GAME_ID }}
     level-id: factory
     image: build/maps/factory.png
@@ -208,7 +215,7 @@ You can also pass bounds as four scalar inputs (`bounds-center-x`, `bounds-cente
 Any engine that produces a top-down PNG can call the CLI as a subprocess. From a Unity editor script, for example:
 
 ```csharp
-var psi = new ProcessStartInfo("testingfloor", $"upload-map --game-id 42 --level-id {level} --image \"{pngPath}\" --bounds {bounds} --app-version {Application.version}") {
+var psi = new ProcessStartInfo("testingfloor", $"upload-map --organization-id gamedepartment --game-id 42 --level-id {level} --image \"{pngPath}\" --bounds {bounds} --app-version {Application.version}") {
     UseShellExecute = false,
 };
 psi.EnvironmentVariables["TESTING_FLOOR_API_TOKEN"] = token;
@@ -220,6 +227,7 @@ Process.Start(psi);
 Top-level:
 
 - `apiUrl`: Testing Floor base URL. Defaults to `https://testingfloor.com`.
+- `organizationId`: organization slug or numeric id.
 - `gameId`: numeric Testing Floor game id.
 - `version`: version metadata. Required by the API.
 - `gitSha`: optional git SHA metadata.
@@ -239,7 +247,7 @@ Build object:
 
 Map config top-level:
 
-- `gameId`, `apiUrl`, `token`: same as builds.
+- `organizationId`, `gameId`, `apiUrl`, `token`: same as builds.
 - `appVersion`: app version pinned to every map in the file. Per-map values override.
 - `maps`: array of map objects.
 
@@ -255,6 +263,7 @@ Map object:
 
 - `TESTING_FLOOR_API_TOKEN`
 - `TESTING_FLOOR_API_URL`
+- `TESTING_FLOOR_ORGANIZATION_ID`
 - `TESTING_FLOOR_GAME_ID`
 - `TESTING_FLOOR_VERSION`
 - `TESTING_FLOOR_GIT_SHA`

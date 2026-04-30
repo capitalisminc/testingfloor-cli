@@ -1,4 +1,4 @@
-import { appendFileSync, createReadStream, createWriteStream } from "node:fs";
+import { createReadStream, createWriteStream } from "node:fs";
 import { access, chmod, lstat, mkdir, opendir, readlink, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -8,7 +8,10 @@ import { finished } from "node:stream/promises";
 import { addPath } from "@actions/core";
 import { cacheFile, downloadTool, extractZip, find as findTool } from "@actions/tool-cache";
 import ZipStream from "zip-stream";
+import { input, requiredInput, writeOutput } from "./action-io.js";
 import { resolveUploadPlan, uploadBuild } from "./cli.js";
+
+export { input, requiredInput, writeOutput } from "./action-io.js";
 
 const BUTLER_TOOL_NAME = "butler";
 
@@ -42,6 +45,7 @@ export async function runAction(env = process.env, cwd = process.cwd()) {
       gitSha: inputs.gitSha,
       launchArg: build.launchArgs,
       launchPath: build.launchPath,
+      organizationId: inputs.organizationId,
       platform: build.platform,
       sourceRefJson: JSON.stringify(inputs.sourceRef),
       token: inputs.apiToken,
@@ -74,6 +78,7 @@ export function readInputs(env) {
     gitSha: input(env, "git-sha"),
     launchArgs: parseJsonInput(input(env, "launch-args") || "[]", "launch-args"),
     launchPath: requiredInput(env, "launch-path"),
+    organizationId: input(env, "organization-id") || undefined,
     platform: requiredInput(env, "platform"),
     sourceRef: parseJsonInput(input(env, "source-ref") || "{}", "source-ref"),
     version: requiredInput(env, "version"),
@@ -300,33 +305,4 @@ function normalizeZipPath(value) {
 function defaultArchiveName({ env, inputs }) {
   const version = inputs.version || env.GITHUB_SHA || "build";
   return `build-${inputs.platform}-${version}.zip`;
-}
-
-export function input(env, name) {
-  const actionName = `INPUT_${name.replaceAll(" ", "_").toUpperCase()}`;
-  const shellName = `INPUT_${name.toUpperCase().replaceAll("-", "_")}`;
-  const value = env[actionName] ?? env[shellName];
-  return value === undefined || value === "" ? null : value;
-}
-
-export function requiredInput(env, name) {
-  const value = input(env, name);
-  if (!value) {
-    throw new Error(`Missing required input: ${name}`);
-  }
-
-  return value;
-}
-
-export function writeOutput(name, value, env) {
-  if (value === undefined || value === null) {
-    return;
-  }
-
-  if (env.GITHUB_OUTPUT) {
-    appendFileSync(env.GITHUB_OUTPUT, `${name}=${value}\n`);
-    return;
-  }
-
-  process.stdout.write(`${name}=${value}\n`);
 }

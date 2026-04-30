@@ -13,6 +13,9 @@ inputs:
   game-id:
     description: Numeric Testing Floor game id.
     required: true
+  organization-id:
+    description: Testing Floor organization slug or numeric id. Can also be set with TESTING_FLOOR_ORGANIZATION_ID.
+    required: false
   platform:
     description: "Testing Floor platform: windows, macos, or linux."
     required: true
