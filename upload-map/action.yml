@@ -9,7 +9,7 @@ inputs:
   api-url:
     description: Testing Floor base URL.
     required: false
-    default: https://testingfloor.com
+    default: https://api.testingfloor.com
   game-id:
     description: Numeric Testing Floor game id.
     required: true

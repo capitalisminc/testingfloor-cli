@@ -24,7 +24,7 @@ node bin/testingfloor.js upload-build --help
 export TESTING_FLOOR_API_TOKEN="tf_..."
 
 testingfloor upload-build \
-  --api-url https://testingfloor.com \
+  --api-url https://api.testingfloor.com \
   --organization-id gamedepartment \
   --game-id 42 \
   --platform windows \
@@ -226,7 +226,7 @@ Process.Start(psi);
 
 Top-level:
 
-- `apiUrl`: Testing Floor base URL. Defaults to `https://testingfloor.com`.
+- `apiUrl`: Testing Floor base URL. Defaults to `https://api.testingfloor.com`.
 - `organizationId`: organization slug or numeric id.
 - `gameId`: numeric Testing Floor game id.
 - `version`: version metadata. Required by the API.
