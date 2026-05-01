@@ -657,7 +657,7 @@ test("resolveMapPlan builds single map upload from flags", async () => {
     cwd
   );
 
-  assert.equal(plan.apiUrl, "https://testingfloor.com");
+  assert.equal(plan.apiUrl, "https://api.testingfloor.com");
   assert.equal(plan.organizationId, "gamedepartment");
   assert.equal(plan.gameId, "42");
   assert.equal(plan.token, "tf_test");

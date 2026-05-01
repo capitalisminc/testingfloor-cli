@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
-const DEFAULT_API_URL = "https://testingfloor.com";
+const DEFAULT_API_URL = "https://api.testingfloor.com";
 const PLATFORMS = new Set(["windows", "macos", "linux"]);
 const AXES = new Set(["x", "y", "z"]);
 const IMAGE_MIME_TYPES = {

@@ -30614,7 +30614,7 @@ var import_node_https = __toESM(require("node:https"), 1);
 var import_node_os = __toESM(require("node:os"), 1);
 var import_node_path = __toESM(require("node:path"), 1);
 var import_node_process2 = __toESM(require("node:process"), 1);
-var DEFAULT_API_URL = "https://testingfloor.com";
+var DEFAULT_API_URL = "https://api.testingfloor.com";
 var PLATFORMS = /* @__PURE__ */ new Set(["windows", "macos", "linux"]);
 async function resolveUploadPlan(options, env = {}, cwd = import_node_process2.default.cwd()) {
   const configPath = options.config ? import_node_path.default.resolve(cwd, options.config) : null;
@@ -31251,7 +31251,7 @@ async function runAction(env = import_node_process3.default.env, cwd = import_no
 function readInputs(env) {
   return {
     apiToken: requiredInput(env, "api-token"),
-    apiUrl: input(env, "api-url") || "https://testingfloor.com",
+    apiUrl: input(env, "api-url") || "https://api.testingfloor.com",
     archive: input(env, "archive"),
     archiveKind: input(env, "archive-kind") || "zip",
     butlerPath: input(env, "butler-path"),

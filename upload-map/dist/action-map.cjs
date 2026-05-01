@@ -57,7 +57,7 @@ function writeOutput(name, value, env) {
 var import_promises = require("node:fs/promises");
 var import_node_path = __toESM(require("node:path"), 1);
 var import_node_process2 = __toESM(require("node:process"), 1);
-var DEFAULT_API_URL = "https://testingfloor.com";
+var DEFAULT_API_URL = "https://api.testingfloor.com";
 var AXES = /* @__PURE__ */ new Set(["x", "y", "z"]);
 var IMAGE_MIME_TYPES = {
   ".png": "image/png",

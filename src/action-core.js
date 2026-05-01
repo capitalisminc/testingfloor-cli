@@ -67,7 +67,7 @@ export async function runAction(env = process.env, cwd = process.cwd()) {
 export function readInputs(env) {
   return {
     apiToken: requiredInput(env, "api-token"),
-    apiUrl: input(env, "api-url") || "https://testingfloor.com",
+    apiUrl: input(env, "api-url") || "https://api.testingfloor.com",
     archive: input(env, "archive"),
     archiveKind: input(env, "archive-kind") || "zip",
     butlerPath: input(env, "butler-path"),
