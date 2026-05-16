@@ -30651,6 +30651,7 @@ async function resolveUploadPlan(options, env = {}, cwd = import_node_process2.d
     ...parseSourceRefJson(options.sourceRefJson),
     ...parseSourceRefEntries(options.sourceRef ?? [])
   };
+  const branch = firstPresent(options.branch, env.TESTING_FLOOR_BRANCH, config.branch);
   const rawBuilds = cliBuildRequested ? [buildFromOptions(options)] : configuredBuilds;
   const builds = rawBuilds.map(
     (build) => normalizeBuild(build, {
@@ -30658,7 +30659,8 @@ async function resolveUploadPlan(options, env = {}, cwd = import_node_process2.d
       cwd,
       commonVersion: version,
       commonGitSha: gitSha,
-      commonSourceRef: sourceRef
+      commonSourceRef: sourceRef,
+      commonBranch: branch
     })
   );
   validatePlan({ apiUrl, token, organizationId, gameId, builds });
@@ -30703,6 +30705,7 @@ async function uploadBuild(plan, build, { log = console.error } = {}) {
   const hashes = await hashFile(build.archivePath);
   const createResponse = await postJson(gameApiUrl(plan, "/builds"), plan.token, {
     platform: build.platform,
+    branch: build.branch,
     version: build.version,
     git_sha: build.gitSha,
     archive_kind: build.archiveKind,
@@ -30771,6 +30774,7 @@ async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
     const signatureHashes = await hashFile(signaturePath);
     const createResponse = await postJson(gameApiUrl(plan, "/builds"), plan.token, {
       platform: build.platform,
+      branch: build.branch,
       version: build.version,
       git_sha: build.gitSha,
       archive_kind: "wharf",
@@ -30824,8 +30828,12 @@ async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
   }
 }
 async function fetchWharfBase(plan, build) {
+  const query = new URLSearchParams({ platform: build.platform });
+  if (build.branch) {
+    query.set("branch", build.branch);
+  }
   const response = await getJson(
-    gameApiUrl(plan, `/builds/wharf/base?platform=${encodeURIComponent(build.platform)}`),
+    gameApiUrl(plan, `/builds/wharf/base?${query.toString()}`),
     plan.token
   );
   return {
@@ -30887,6 +30895,7 @@ function buildFromOptions(options) {
   return {
     archive: options.archive,
     archiveKind: options.archiveKind,
+    branch: options.branch,
     filename: options.filename,
     gitSha: options.gitSha,
     launchArgs: options.launchArg,
@@ -30897,12 +30906,13 @@ function buildFromOptions(options) {
     workingDirectory: options.workingDirectory
   };
 }
-function normalizeBuild(build, { configDir, cwd, commonVersion, commonGitSha, commonSourceRef }) {
+function normalizeBuild(build, { configDir, cwd, commonVersion, commonGitSha, commonSourceRef, commonBranch }) {
   const archive = build.archive ?? build.path;
   const archiveKind = build.archiveKind ?? build.archive_kind ?? "zip";
   return {
     archivePath: archive ? resolveBuildPath(archive, build.fromConfig === false ? cwd : configDir) : null,
     archiveKind,
+    branch: build.branch ?? commonBranch ?? void 0,
     filename: build.filename ?? defaultBuildFilename(archive, archiveKind),
     gitSha: build.gitSha ?? build.git_sha ?? commonGitSha,
     launchArgs: normalizeLaunchArgs(build.launchArgs ?? build.launch_args),
@@ -31225,6 +31235,7 @@ async function runAction(env = import_node_process3.default.env, cwd = import_no
       apiUrl: inputs.apiUrl,
       archive: archivePath,
       archiveKind: inputs.archiveKind,
+      branch: inputs.branch,
       butlerPath,
       filename: build.filename,
       gameId: inputs.gameId,
@@ -31254,6 +31265,7 @@ function readInputs(env) {
     apiUrl: input(env, "api-url") || "https://api.testingfloor.com",
     archive: input(env, "archive"),
     archiveKind: input(env, "archive-kind") || "zip",
+    branch: input(env, "branch") || void 0,
     butlerPath: input(env, "butler-path"),
     butlerVersion: input(env, "butler-version") || "LATEST",
     buildDirectory: input(env, "build-directory"),

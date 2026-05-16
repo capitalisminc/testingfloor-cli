@@ -19,6 +19,9 @@ inputs:
   platform:
     description: "Testing Floor platform: windows, macos, or linux."
     required: true
+  branch:
+    description: "Branch key on the game to upload this build to (e.g. \"unity-main\", \"ue-main\"). Defaults to the game's default branch. Unknown keys are rejected."
+    required: false
   archive:
     description: Existing zip archive to upload. If omitted, build-directory is zipped first.
     required: false

@@ -24,6 +24,7 @@ const VALUE_OPTIONS = new Set([
   "archive",
   "archive-kind",
   "bounds",
+  "branch",
   "butler-path",
   "config",
   "filename",
@@ -161,6 +162,7 @@ export async function resolveUploadPlan(options, env = {}, cwd = process.cwd()) 
     ...parseSourceRefJson(options.sourceRefJson),
     ...parseSourceRefEntries(options.sourceRef ?? [])
   };
+  const branch = firstPresent(options.branch, env.TESTING_FLOOR_BRANCH, config.branch);
 
   const rawBuilds = cliBuildRequested ? [buildFromOptions(options)] : configuredBuilds;
   const builds = rawBuilds.map((build) =>
@@ -169,7 +171,8 @@ export async function resolveUploadPlan(options, env = {}, cwd = process.cwd()) 
       cwd,
       commonVersion: version,
       commonGitSha: gitSha,
-      commonSourceRef: sourceRef
+      commonSourceRef: sourceRef,
+      commonBranch: branch
     })
   );
 
@@ -443,6 +446,7 @@ export async function uploadBuild(plan, build, { log = console.error } = {}) {
 
   const createResponse = await postJson(gameApiUrl(plan, "/builds"), plan.token, {
     platform: build.platform,
+    branch: build.branch,
     version: build.version,
     git_sha: build.gitSha,
     archive_kind: build.archiveKind,
@@ -521,6 +525,7 @@ async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
 
     const createResponse = await postJson(gameApiUrl(plan, "/builds"), plan.token, {
       platform: build.platform,
+      branch: build.branch,
       version: build.version,
       git_sha: build.gitSha,
       archive_kind: "wharf",
@@ -578,8 +583,12 @@ async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
 }
 
 async function fetchWharfBase(plan, build) {
+  const query = new URLSearchParams({ platform: build.platform });
+  if (build.branch) {
+    query.set("branch", build.branch);
+  }
   const response = await getJson(
-    gameApiUrl(plan, `/builds/wharf/base?platform=${encodeURIComponent(build.platform)}`),
+    gameApiUrl(plan, `/builds/wharf/base?${query.toString()}`),
     plan.token
   );
   return {
@@ -650,6 +659,7 @@ function buildFromOptions(options) {
   return {
     archive: options.archive,
     archiveKind: options.archiveKind,
+    branch: options.branch,
     filename: options.filename,
     gitSha: options.gitSha,
     launchArgs: options.launchArg,
@@ -661,13 +671,14 @@ function buildFromOptions(options) {
   };
 }
 
-function normalizeBuild(build, { configDir, cwd, commonVersion, commonGitSha, commonSourceRef }) {
+function normalizeBuild(build, { configDir, cwd, commonVersion, commonGitSha, commonSourceRef, commonBranch }) {
   const archive = build.archive ?? build.path;
   const archiveKind = build.archiveKind ?? build.archive_kind ?? "zip";
 
   return {
     archivePath: archive ? resolveBuildPath(archive, build.fromConfig === false ? cwd : configDir) : null,
     archiveKind,
+    branch: build.branch ?? commonBranch ?? undefined,
     filename: build.filename ?? defaultBuildFilename(archive, archiveKind),
     gitSha: build.gitSha ?? build.git_sha ?? commonGitSha,
     launchArgs: normalizeLaunchArgs(build.launchArgs ?? build.launch_args),

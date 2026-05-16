@@ -128,6 +128,74 @@ test("resolveUploadPlan builds single upload from flags and env", async () => {
   assert.deepEqual(plan.builds[0].sourceRef, { run_id: "123" });
 });
 
+test("resolveUploadPlan threads branch from --branch through to each build", async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  await writeFile(path.join(cwd, "game.zip"), "zip bytes");
+
+  const plan = await resolveUploadPlan(
+    {
+      archive: "game.zip",
+      branch: "unity-main",
+      gameId: "42",
+      launchPath: "Game.exe",
+      platform: "windows",
+      version: "0.4.12"
+    },
+    {
+      TESTING_FLOOR_API_TOKEN: "tf_test",
+      TESTING_FLOOR_ORGANIZATION_ID: "gamedepartment"
+    },
+    cwd
+  );
+
+  assert.equal(plan.builds[0].branch, "unity-main");
+});
+
+test("resolveUploadPlan falls back to TESTING_FLOOR_BRANCH env when --branch is absent", async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  await writeFile(path.join(cwd, "game.zip"), "zip bytes");
+
+  const plan = await resolveUploadPlan(
+    {
+      archive: "game.zip",
+      gameId: "42",
+      launchPath: "Game.exe",
+      platform: "windows",
+      version: "0.4.12"
+    },
+    {
+      TESTING_FLOOR_API_TOKEN: "tf_test",
+      TESTING_FLOOR_BRANCH: "ue-main",
+      TESTING_FLOOR_ORGANIZATION_ID: "gamedepartment"
+    },
+    cwd
+  );
+
+  assert.equal(plan.builds[0].branch, "ue-main");
+});
+
+test("resolveUploadPlan leaves branch undefined when no source provides one", async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  await writeFile(path.join(cwd, "game.zip"), "zip bytes");
+
+  const plan = await resolveUploadPlan(
+    {
+      archive: "game.zip",
+      gameId: "42",
+      launchPath: "Game.exe",
+      platform: "windows",
+      version: "0.4.12"
+    },
+    {
+      TESTING_FLOOR_API_TOKEN: "tf_test",
+      TESTING_FLOOR_ORGANIZATION_ID: "gamedepartment"
+    },
+    cwd
+  );
+
+  assert.equal(plan.builds[0].branch, undefined);
+});
+
 test("resolveUploadPlan accepts wharf builds from directories", async () => {
   const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
   const buildDir = path.join(cwd, "windows-build");
