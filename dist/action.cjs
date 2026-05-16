@@ -30954,8 +30954,8 @@ function validatePlan(plan) {
       "Missing organization id. Set organizationId in config, TESTING_FLOOR_ORGANIZATION_ID, or pass --organization-id."
     );
   }
-  if (!plan.gameId || !/^\d+$/.test(String(plan.gameId))) {
-    throw new Error("Missing numeric game id. Set gameId in config or pass --game-id.");
+  if (!plan.gameId || !/^[A-Za-z0-9_-]+$/.test(String(plan.gameId))) {
+    throw new Error('Missing game id. Set gameId in config or pass --game-id. Accepts numeric id or game key (e.g. "crux").');
   }
   if (plan.builds.length === 0) {
     throw new Error("No builds configured. Pass --platform/--archive or provide config builds.");

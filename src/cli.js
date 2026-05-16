@@ -338,8 +338,8 @@ function validateMapPlan(plan) {
     );
   }
 
-  if (!plan.gameId || !/^\d+$/.test(String(plan.gameId))) {
-    throw new Error("Missing numeric game id. Set gameId in config or pass --game-id.");
+  if (!plan.gameId || !/^[A-Za-z0-9_-]+$/.test(String(plan.gameId))) {
+    throw new Error("Missing game id. Set gameId in config or pass --game-id. Accepts numeric id or game key (e.g. \"crux\").");
   }
 
   if (plan.maps.length === 0) {
@@ -728,8 +728,8 @@ function validatePlan(plan) {
     );
   }
 
-  if (!plan.gameId || !/^\d+$/.test(String(plan.gameId))) {
-    throw new Error("Missing numeric game id. Set gameId in config or pass --game-id.");
+  if (!plan.gameId || !/^[A-Za-z0-9_-]+$/.test(String(plan.gameId))) {
+    throw new Error("Missing game id. Set gameId in config or pass --game-id. Accepts numeric id or game key (e.g. \"crux\").");
   }
 
   if (plan.builds.length === 0) {

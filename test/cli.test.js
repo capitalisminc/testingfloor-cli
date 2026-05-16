@@ -256,6 +256,52 @@ test("resolveUploadPlan supports config builds relative to config file", async (
   assert.equal(plan.organizationId, "gamedepartment");
 });
 
+test("resolveUploadPlan accepts a game key (slug) as game-id", async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  await writeFile(path.join(cwd, "game.zip"), "zip bytes");
+
+  const plan = await resolveUploadPlan(
+    {
+      archive: "game.zip",
+      gameId: "crux",
+      launchPath: "Game.exe",
+      platform: "windows",
+      version: "0.4.12"
+    },
+    {
+      TESTING_FLOOR_API_TOKEN: "tf_test",
+      TESTING_FLOOR_ORGANIZATION_ID: "gamedepartment"
+    },
+    cwd
+  );
+
+  assert.equal(plan.gameId, "crux");
+});
+
+test("resolveUploadPlan rejects game ids with disallowed characters", async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  await writeFile(path.join(cwd, "game.zip"), "zip bytes");
+
+  await assert.rejects(
+    () =>
+      resolveUploadPlan(
+        {
+          archive: "game.zip",
+          gameId: "../etc/passwd",
+          launchPath: "Game.exe",
+          platform: "windows",
+          version: "0.4.12"
+        },
+        {
+          TESTING_FLOOR_API_TOKEN: "tf_test",
+          TESTING_FLOOR_ORGANIZATION_ID: "gamedepartment"
+        },
+        cwd
+      ),
+    /game key/
+  );
+});
+
 test("resolveUploadPlan requires an organization id", async () => {
   await assert.rejects(
     () =>
