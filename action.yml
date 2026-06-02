@@ -77,5 +77,5 @@ outputs:
     description: Uploaded archive size.
 
 runs:
-  using: node20
+  using: node24
   main: dist/action.cjs

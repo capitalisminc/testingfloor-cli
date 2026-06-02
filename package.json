@@ -8,8 +8,8 @@
   },
   "scripts": {
     "build": "npm run build:action && npm run build:action-map",
-    "build:action": "esbuild src/action.js --bundle --platform=node --format=cjs --target=node20 --outfile=dist/action.cjs",
-    "build:action-map": "esbuild src/action-map-entry.js --bundle --platform=node --format=cjs --target=node20 --outfile=upload-map/dist/action-map.cjs",
+    "build:action": "esbuild src/action.js --bundle --platform=node --format=cjs --target=node24 --outfile=dist/action.cjs",
+    "build:action-map": "esbuild src/action-map-entry.js --bundle --platform=node --format=cjs --target=node24 --outfile=upload-map/dist/action-map.cjs",
     "lint": "node --check bin/testingfloor.js && node --check src/action.js && node --check src/action-core.js && node --check src/action-io.js && node --check src/action-map.js && node --check src/action-map-entry.js && node --check src/cli.js && node --check test/cli.test.js && node --check dist/action.cjs && node --check upload-map/dist/action-map.cjs",
     "prepack": "npm run build",
     "test": "node --test"

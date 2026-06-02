@@ -79,5 +79,5 @@ outputs:
     description: Whether the map is fully configured (image attached and bounds set).
 
 runs:
-  using: node20
+  using: node24
   main: dist/action-map.cjs
