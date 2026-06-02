@@ -156,10 +156,12 @@ testingfloor upload-map \
   --level-id factory \
   --image ./Builds/maps/factory.png \
   --bounds 0,0,200,200 \
-  --app-version 0.4.12
+  --app-version 0.4.12 \
+  --variant-key ground-floor \
+  --default-variant true
 ```
 
-`--bounds` is `center_x,center_z,size_x,size_z` in world units. `--app-version` is optional and pins the upload to a specific app version, so prior captures stay viewable when geometry changes between releases.
+`--bounds` is `center_x,center_z,size_x,size_z` in world units. `--app-version` is optional telemetry metadata that lets Testing Floor match maps to captures from the same game build. Use `--variant-key` for alternate floors, view modes, or other same-version map variants. Use `--map-version` when you need to update a specific telemetry map version instead of letting the server choose the current version. Mark one variant with `--default-variant true` when it should be the default view for that level/version.
 
 ### Multiple Maps
 
@@ -170,16 +172,20 @@ Create `testingfloor-maps.json`:
   "organizationId": "gamedepartment",
   "gameId": 42,
   "appVersion": "0.4.12",
+  "mapVersion": 3,
   "maps": [
     {
       "levelId": "factory",
       "image": "./Builds/maps/factory.png",
-      "bounds": { "centerX": 0, "centerZ": 0, "sizeX": 200, "sizeZ": 200 }
+      "bounds": { "centerX": 0, "centerZ": 0, "sizeX": 200, "sizeZ": 200 },
+      "variantKey": "ground-floor",
+      "defaultVariant": true
     },
     {
       "levelId": "warehouse",
       "image": "./Builds/maps/warehouse.png",
-      "bounds": { "centerX": 50, "centerZ": -10, "sizeX": 128, "sizeZ": 128 }
+      "bounds": { "centerX": 50, "centerZ": -10, "sizeX": 128, "sizeZ": 128 },
+      "variantKey": "roof"
     }
   ]
 }
@@ -206,6 +212,8 @@ Image paths in a config file are resolved relative to that config file.
     image: build/maps/factory.png
     bounds: "0,0,200,200"
     app-version: ${{ github.ref_name }}
+    variant-key: ground-floor
+    default-variant: "true"
 ```
 
 You can also pass bounds as four scalar inputs (`bounds-center-x`, `bounds-center-z`, `bounds-size-x`, `bounds-size-z`) if that's easier to wire up in your workflow.
@@ -215,7 +223,7 @@ You can also pass bounds as four scalar inputs (`bounds-center-x`, `bounds-cente
 Any engine that produces a top-down PNG can call the CLI as a subprocess. From a Unity editor script, for example:
 
 ```csharp
-var psi = new ProcessStartInfo("testingfloor", $"upload-map --organization-id gamedepartment --game-id 42 --level-id {level} --image \"{pngPath}\" --bounds {bounds} --app-version {Application.version}") {
+var psi = new ProcessStartInfo("testingfloor", $"upload-map --organization-id gamedepartment --game-id 42 --level-id {level} --image \"{pngPath}\" --bounds {bounds} --app-version {Application.version} --variant-key {variant}") {
     UseShellExecute = false,
 };
 psi.EnvironmentVariables["TESTING_FLOOR_API_TOKEN"] = token;
@@ -249,6 +257,7 @@ Map config top-level:
 
 - `organizationId`, `gameId`, `apiUrl`, `token`: same as builds.
 - `appVersion`: app version pinned to every map in the file. Per-map values override.
+- `mapVersion`: telemetry map version number pinned to every map in the file. Per-map values override.
 - `maps`: array of map objects.
 
 Map object:
@@ -258,6 +267,9 @@ Map object:
 - `bounds`: object with `centerX`, `centerZ`, `sizeX`, `sizeZ` — or a `"cx,cz,sx,sz"` string.
 - `horizontalAxis`, `verticalAxis`: world axes (`x`, `y`, `z`). Default to `x`/`z`. Must differ.
 - `appVersion`: optional override of the top-level `appVersion`.
+- `mapVersion` or `version`: optional telemetry map version number override.
+- `variantKey` or `variant`: optional variant key for floors, modes, or alternate views.
+- `defaultVariant`: optional boolean that marks this variant as the default for its level/version.
 
 ## Environment
 
@@ -266,6 +278,7 @@ Map object:
 - `TESTING_FLOOR_ORGANIZATION_ID`
 - `TESTING_FLOOR_GAME_ID`
 - `TESTING_FLOOR_VERSION`
+- `TESTING_FLOOR_MAP_VERSION`
 - `TESTING_FLOOR_GIT_SHA`
 - `TESTING_FLOOR_BUTLER_PATH`
 

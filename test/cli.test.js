@@ -704,6 +704,12 @@ test("parseArgs parses upload-map flags", () => {
     "--bounds",
     "0,0,200,200",
     "--app-version=0.4.12",
+    "--map-version",
+    "3",
+    "--variant",
+    "ground-floor",
+    "--default-variant",
+    "true",
     "--horizontal-axis",
     "x",
     "--vertical-axis",
@@ -717,6 +723,9 @@ test("parseArgs parses upload-map flags", () => {
   assert.equal(parsed.options.image, "factory.png");
   assert.equal(parsed.options.bounds, "0,0,200,200");
   assert.equal(parsed.options.appVersion, "0.4.12");
+  assert.equal(parsed.options.mapVersion, "3");
+  assert.equal(parsed.options.variant, "ground-floor");
+  assert.equal(parsed.options.defaultVariant, "true");
   assert.equal(parsed.options.horizontalAxis, "x");
   assert.equal(parsed.options.verticalAxis, "z");
 });
@@ -759,9 +768,12 @@ test("resolveMapPlan builds single map upload from flags", async () => {
   const plan = await resolveMapPlan(
     {
       bounds: "0,0,200,200",
+      defaultVariant: "true",
       gameId: "42",
       image: "factory.png",
-      levelId: "factory"
+      levelId: "factory",
+      mapVersion: "3",
+      variant: "ground-floor"
     },
     {
       TESTING_FLOOR_API_TOKEN: "tf_test",
@@ -785,6 +797,9 @@ test("resolveMapPlan builds single map upload from flags", async () => {
   assert.equal(map.horizontalAxis, "x");
   assert.equal(map.verticalAxis, "z");
   assert.equal(map.appVersion, "0.4.12");
+  assert.equal(map.version, 3);
+  assert.equal(map.variantKey, "ground-floor");
+  assert.equal(map.defaultVariant, true);
 });
 
 test("resolveMapPlan supports config maps relative to config file", async () => {
@@ -798,11 +813,14 @@ test("resolveMapPlan supports config maps relative to config file", async () => 
       organizationId: "gamedepartment",
       gameId: 42,
       appVersion: "0.4.12",
+      mapVersion: 3,
       maps: [
         {
           levelId: "factory",
           image: "../factory.png",
-          bounds: { centerX: 0, centerZ: 0, sizeX: 200, sizeZ: 200 }
+          bounds: { centerX: 0, centerZ: 0, sizeX: 200, sizeZ: 200 },
+          variantKey: "ground-floor",
+          defaultVariant: true
         }
       ]
     })
@@ -818,6 +836,9 @@ test("resolveMapPlan supports config maps relative to config file", async () => 
   assert.equal(plan.organizationId, "gamedepartment");
   assert.equal(plan.maps[0].imagePath, path.join(cwd, "factory.png"));
   assert.equal(plan.maps[0].appVersion, "0.4.12");
+  assert.equal(plan.maps[0].version, 3);
+  assert.equal(plan.maps[0].variantKey, "ground-floor");
+  assert.equal(plan.maps[0].defaultVariant, true);
 });
 
 test("resolveMapPlan rejects mismatched axes and missing fields", async () => {
@@ -889,6 +910,9 @@ test("uploadMap posts multipart form data and returns the created map", async (t
         version: 1,
         pinned: true,
         app_version: "0.4.12",
+        variant_key: "ground-floor",
+        variant_label: "Ground floor",
+        default_variant: true,
         bounds: { center_x: 0, center_z: 0, size_x: 200, size_z: 200 },
         map_horizontal_axis: "x",
         map_vertical_axis: "z",
@@ -914,7 +938,10 @@ test("uploadMap posts multipart form data and returns the created map", async (t
       bounds: { centerX: 0, centerZ: 0, sizeX: 200, sizeZ: 200 },
       horizontalAxis: "x",
       verticalAxis: "z",
-      appVersion: "0.4.12"
+      appVersion: "0.4.12",
+      variantKey: "ground-floor",
+      version: 1,
+      defaultVariant: true
     },
     { log: () => {} }
   );
@@ -924,6 +951,9 @@ test("uploadMap posts multipart form data and returns the created map", async (t
   assert.equal(result.version, 1);
   assert.equal(result.pinned, true);
   assert.equal(result.appVersion, "0.4.12");
+  assert.equal(result.variantKey, "ground-floor");
+  assert.equal(result.variantLabel, "Ground floor");
+  assert.equal(result.defaultVariant, true);
   assert.equal(result.created, true);
   assert.equal(receivedAuth, "Bearer tf_test");
   assert.match(receivedContentType ?? "", /^multipart\/form-data; boundary=/);
@@ -933,6 +963,9 @@ test("uploadMap posts multipart form data and returns the created map", async (t
   assert.match(receivedBody ?? "", /name="map_horizontal_axis"\r\n\r\nx\r\n/);
   assert.match(receivedBody ?? "", /name="map_vertical_axis"\r\n\r\nz\r\n/);
   assert.match(receivedBody ?? "", /name="app_version"\r\n\r\n0\.4\.12\r\n/);
+  assert.match(receivedBody ?? "", /name="variant_key"\r\n\r\nground-floor\r\n/);
+  assert.match(receivedBody ?? "", /name="version"\r\n\r\n1\r\n/);
+  assert.match(receivedBody ?? "", /name="default_variant"\r\n\r\ntrue\r\n/);
   assert.match(receivedBody ?? "", /name="image"; filename="factory\.png"\r\nContent-Type: image\/png\r\n\r\npng-bytes\r\n/);
 });
 
@@ -943,6 +976,9 @@ test("readMapInputs assembles bounds from four scalar inputs", () => {
     "INPUT_GAME-ID": "42",
     "INPUT_LEVEL-ID": "factory",
     INPUT_IMAGE: "factory.png",
+    "INPUT_MAP-VERSION": "3",
+    "INPUT_VARIANT-KEY": "ground-floor",
+    "INPUT_DEFAULT-VARIANT": "true",
     "INPUT_BOUNDS-CENTER-X": "0",
     "INPUT_BOUNDS-CENTER-Z": "0",
     "INPUT_BOUNDS-SIZE-X": "200",
@@ -954,6 +990,9 @@ test("readMapInputs assembles bounds from four scalar inputs", () => {
   assert.equal(inputs.gameId, "42");
   assert.equal(inputs.levelId, "factory");
   assert.equal(inputs.image, "factory.png");
+  assert.equal(inputs.mapVersion, "3");
+  assert.equal(inputs.variantKey, "ground-floor");
+  assert.equal(inputs.defaultVariant, "true");
   assert.deepEqual(inputs.bounds, { centerX: "0", centerZ: "0", sizeX: "200", sizeZ: "200" });
 });
 

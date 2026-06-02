@@ -13,6 +13,9 @@ export async function runMapAction(env = process.env, cwd = process.cwd()) {
   writeOutput("version", result.version, env);
   writeOutput("pinned", result.pinned, env);
   writeOutput("app-version", result.appVersion, env);
+  writeOutput("variant-key", result.variantKey, env);
+  writeOutput("variant-label", result.variantLabel, env);
+  writeOutput("default-variant", result.defaultVariant, env);
   writeOutput("configured", result.configured, env);
 }
 
@@ -25,8 +28,11 @@ export function readMapInputs(env) {
     horizontalAxis: input(env, "horizontal-axis") || undefined,
     image: requiredInput(env, "image"),
     levelId: requiredInput(env, "level-id"),
+    mapVersion: input(env, "map-version") || undefined,
     organizationId: input(env, "organization-id") || undefined,
     token: requiredInput(env, "api-token"),
+    variantKey: input(env, "variant-key") || input(env, "variant") || undefined,
+    defaultVariant: input(env, "default-variant") || undefined,
     verticalAxis: input(env, "vertical-axis") || undefined
   };
 }

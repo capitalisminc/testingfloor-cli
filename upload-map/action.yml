@@ -48,6 +48,15 @@ inputs:
   app-version:
     description: App version associated with this map snapshot. Used for telemetry-map versioning.
     required: false
+  map-version:
+    description: Telemetry map version number to update. Defaults to the latest pinned/server-selected version.
+    required: false
+  variant-key:
+    description: Variant key for floors, modes, or alternate map views.
+    required: false
+  default-variant:
+    description: Whether this variant should be the default for this map version.
+    required: false
 
 outputs:
   map-id:
@@ -60,6 +69,12 @@ outputs:
     description: Whether this version is pinned for visualization.
   app-version:
     description: App version recorded with the map.
+  variant-key:
+    description: Variant key recorded with the map.
+  variant-label:
+    description: Human-readable variant label returned by Testing Floor.
+  default-variant:
+    description: Whether this variant is the default for the map version.
   configured:
     description: Whether the map is fully configured (image attached and bounds set).
 

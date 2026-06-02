@@ -69,7 +69,9 @@ async function resolveMapPlan(options, env = {}, cwd = import_node_process2.defa
   const configPath = options.config ? import_node_path.default.resolve(cwd, options.config) : null;
   const config = configPath ? await readJson(configPath) : {};
   const configDir = configPath ? import_node_path.default.dirname(configPath) : cwd;
-  const cliMapRequested = Boolean(options.levelId || options.image || options.bounds);
+  const cliMapRequested = Boolean(
+    options.levelId || options.image || options.bounds || options.horizontalAxis || options.verticalAxis || options.variant || options.variantKey || options.defaultVariant
+  );
   const configuredMaps = Array.isArray(config.maps) ? config.maps : [];
   if (cliMapRequested && configuredMaps.length > 0) {
     throw new Error("Use either --config maps or --level-id/--image flags, not both.");
@@ -91,9 +93,15 @@ async function resolveMapPlan(options, env = {}, cwd = import_node_process2.defa
     config.appVersion,
     config.version
   );
+  const mapVersion = firstPresent(
+    options.mapVersion,
+    env.TESTING_FLOOR_MAP_VERSION,
+    config.mapVersion,
+    config.map_version
+  );
   const rawMaps = cliMapRequested ? [mapFromOptions(options)] : configuredMaps;
   const maps = rawMaps.map(
-    (map) => normalizeMap(map, { configDir, cwd, commonAppVersion: appVersion })
+    (map) => normalizeMap(map, { configDir, cwd, commonAppVersion: appVersion, commonMapVersion: mapVersion })
   );
   validateMapPlan({ apiUrl, token, organizationId, gameId, maps });
   return {
@@ -140,6 +148,15 @@ async function uploadMap(plan, map, { log = console.error } = {}) {
   if (map.appVersion) {
     formData.append("app_version", map.appVersion);
   }
+  if (map.variantKey) {
+    formData.append("variant_key", map.variantKey);
+  }
+  if (map.version) {
+    formData.append("version", String(map.version));
+  }
+  if (map.defaultVariant !== null && map.defaultVariant !== void 0) {
+    formData.append("default_variant", map.defaultVariant ? "true" : "false");
+  }
   const imageBytes = await (0, import_promises.readFile)(map.imagePath);
   const imageBlob = new Blob([imageBytes], { type: map.imageMimeType });
   formData.append("image", imageBlob, map.imageFilename);
@@ -147,9 +164,12 @@ async function uploadMap(plan, map, { log = console.error } = {}) {
   return {
     id: response.id,
     levelId: response.level_id ?? map.levelId,
-    version: response.version ?? null,
+    version: response.version ?? map.version ?? null,
     pinned: response.pinned ?? null,
     appVersion: response.app_version ?? map.appVersion ?? null,
+    variantKey: response.variant_key ?? map.variantKey ?? null,
+    variantLabel: response.variant_label ?? null,
+    defaultVariant: response.default_variant ?? map.defaultVariant ?? null,
     bounds: response.bounds ?? null,
     horizontalAxis: response.map_horizontal_axis ?? map.horizontalAxis,
     verticalAxis: response.map_vertical_axis ?? map.verticalAxis,
@@ -164,10 +184,13 @@ function mapFromOptions(options) {
     bounds: options.bounds,
     horizontalAxis: options.horizontalAxis,
     verticalAxis: options.verticalAxis,
-    appVersion: options.appVersion
+    appVersion: options.appVersion,
+    variantKey: options.variantKey ?? options.variant,
+    mapVersion: options.mapVersion,
+    defaultVariant: options.defaultVariant
   };
 }
-function normalizeMap(map, { configDir, cwd, commonAppVersion }) {
+function normalizeMap(map, { configDir, cwd, commonAppVersion, commonMapVersion }) {
   const image = map.image ?? map.path;
   const imagePath = image ? resolveBuildPath(image, map.fromConfig === false ? cwd : configDir) : null;
   const bounds = parseBoundsString(map.bounds);
@@ -181,7 +204,10 @@ function normalizeMap(map, { configDir, cwd, commonAppVersion }) {
     bounds,
     horizontalAxis: (map.horizontalAxis ?? map.map_horizontal_axis ?? "x").toLowerCase(),
     verticalAxis: (map.verticalAxis ?? map.map_vertical_axis ?? "z").toLowerCase(),
-    appVersion: map.appVersion ?? map.app_version ?? commonAppVersion ?? null
+    appVersion: map.appVersion ?? map.app_version ?? commonAppVersion ?? null,
+    variantKey: optionalString(map.variantKey ?? map.variant_key ?? map.variant),
+    version: optionalPositiveInteger(map.mapVersion ?? map.map_version ?? map.version ?? commonMapVersion, "map.version"),
+    defaultVariant: optionalBoolean(map.defaultVariant ?? map.default_variant, "map.defaultVariant")
   };
 }
 function validateMapPlan(plan) {
@@ -241,6 +267,39 @@ function numericValue(value, name) {
     throw new Error(`${name} must be a finite number, got "${value}".`);
   }
   return parsed;
+}
+function optionalPositiveInteger(value, name) {
+  if (value === void 0 || value === null || value === "") {
+    return null;
+  }
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(`${name} must be a positive integer, got "${value}".`);
+  }
+  return parsed;
+}
+function optionalBoolean(value, name) {
+  if (value === void 0 || value === null || value === "") {
+    return null;
+  }
+  if (typeof value === "boolean") {
+    return value;
+  }
+  const normalized = String(value).trim().toLowerCase();
+  if (["true", "1", "yes"].includes(normalized)) {
+    return true;
+  }
+  if (["false", "0", "no"].includes(normalized)) {
+    return false;
+  }
+  throw new Error(`${name} must be true or false.`);
+}
+function optionalString(value) {
+  if (value === void 0 || value === null) {
+    return null;
+  }
+  const string = String(value).trim();
+  return string === "" ? null : string;
 }
 function mimeTypeForImage(filename) {
   return IMAGE_MIME_TYPES[import_node_path.default.extname(filename).toLowerCase()] ?? null;
@@ -302,6 +361,9 @@ async function runMapAction(env = import_node_process3.default.env, cwd = import
   writeOutput("version", result.version, env);
   writeOutput("pinned", result.pinned, env);
   writeOutput("app-version", result.appVersion, env);
+  writeOutput("variant-key", result.variantKey, env);
+  writeOutput("variant-label", result.variantLabel, env);
+  writeOutput("default-variant", result.defaultVariant, env);
   writeOutput("configured", result.configured, env);
 }
 function readMapInputs(env) {
@@ -313,8 +375,11 @@ function readMapInputs(env) {
     horizontalAxis: input(env, "horizontal-axis") || void 0,
     image: requiredInput(env, "image"),
     levelId: requiredInput(env, "level-id"),
+    mapVersion: input(env, "map-version") || void 0,
     organizationId: input(env, "organization-id") || void 0,
     token: requiredInput(env, "api-token"),
+    variantKey: input(env, "variant-key") || input(env, "variant") || void 0,
+    defaultVariant: input(env, "default-variant") || void 0,
     verticalAxis: input(env, "vertical-axis") || void 0
   };
 }

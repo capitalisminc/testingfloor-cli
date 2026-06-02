@@ -34,10 +34,14 @@ const VALUE_OPTIONS = new Set([
   "image",
   "launch-path",
   "level-id",
+  "map-version",
   "organization-id",
   "platform",
   "source-ref-json",
   "token",
+  "default-variant",
+  "variant",
+  "variant-key",
   "version",
   "vertical-axis",
   "working-directory"
@@ -193,7 +197,16 @@ export async function resolveMapPlan(options, env = {}, cwd = process.cwd()) {
   const config = configPath ? await readJson(configPath) : {};
   const configDir = configPath ? path.dirname(configPath) : cwd;
 
-  const cliMapRequested = Boolean(options.levelId || options.image || options.bounds);
+  const cliMapRequested = Boolean(
+    options.levelId ||
+      options.image ||
+      options.bounds ||
+      options.horizontalAxis ||
+      options.verticalAxis ||
+      options.variant ||
+      options.variantKey ||
+      options.defaultVariant
+  );
   const configuredMaps = Array.isArray(config.maps) ? config.maps : [];
   if (cliMapRequested && configuredMaps.length > 0) {
     throw new Error("Use either --config maps or --level-id/--image flags, not both.");
@@ -216,10 +229,16 @@ export async function resolveMapPlan(options, env = {}, cwd = process.cwd()) {
     config.appVersion,
     config.version
   );
+  const mapVersion = firstPresent(
+    options.mapVersion,
+    env.TESTING_FLOOR_MAP_VERSION,
+    config.mapVersion,
+    config.map_version
+  );
 
   const rawMaps = cliMapRequested ? [mapFromOptions(options)] : configuredMaps;
   const maps = rawMaps.map((map) =>
-    normalizeMap(map, { configDir, cwd, commonAppVersion: appVersion })
+    normalizeMap(map, { configDir, cwd, commonAppVersion: appVersion, commonMapVersion: mapVersion })
   );
 
   validateMapPlan({ apiUrl, token, organizationId, gameId, maps });
@@ -276,6 +295,15 @@ export async function uploadMap(plan, map, { log = console.error } = {}) {
   if (map.appVersion) {
     formData.append("app_version", map.appVersion);
   }
+  if (map.variantKey) {
+    formData.append("variant_key", map.variantKey);
+  }
+  if (map.version) {
+    formData.append("version", String(map.version));
+  }
+  if (map.defaultVariant !== null && map.defaultVariant !== undefined) {
+    formData.append("default_variant", map.defaultVariant ? "true" : "false");
+  }
 
   const imageBytes = await readFile(map.imagePath);
   const imageBlob = new Blob([imageBytes], { type: map.imageMimeType });
@@ -286,9 +314,12 @@ export async function uploadMap(plan, map, { log = console.error } = {}) {
   return {
     id: response.id,
     levelId: response.level_id ?? map.levelId,
-    version: response.version ?? null,
+    version: response.version ?? map.version ?? null,
     pinned: response.pinned ?? null,
     appVersion: response.app_version ?? map.appVersion ?? null,
+    variantKey: response.variant_key ?? map.variantKey ?? null,
+    variantLabel: response.variant_label ?? null,
+    defaultVariant: response.default_variant ?? map.defaultVariant ?? null,
     bounds: response.bounds ?? null,
     horizontalAxis: response.map_horizontal_axis ?? map.horizontalAxis,
     verticalAxis: response.map_vertical_axis ?? map.verticalAxis,
@@ -304,11 +335,14 @@ function mapFromOptions(options) {
     bounds: options.bounds,
     horizontalAxis: options.horizontalAxis,
     verticalAxis: options.verticalAxis,
-    appVersion: options.appVersion
+    appVersion: options.appVersion,
+    variantKey: options.variantKey ?? options.variant,
+    mapVersion: options.mapVersion,
+    defaultVariant: options.defaultVariant
   };
 }
 
-function normalizeMap(map, { configDir, cwd, commonAppVersion }) {
+function normalizeMap(map, { configDir, cwd, commonAppVersion, commonMapVersion }) {
   const image = map.image ?? map.path;
   const imagePath = image ? resolveBuildPath(image, map.fromConfig === false ? cwd : configDir) : null;
   const bounds = parseBoundsString(map.bounds);
@@ -323,7 +357,10 @@ function normalizeMap(map, { configDir, cwd, commonAppVersion }) {
     bounds,
     horizontalAxis: (map.horizontalAxis ?? map.map_horizontal_axis ?? "x").toLowerCase(),
     verticalAxis: (map.verticalAxis ?? map.map_vertical_axis ?? "z").toLowerCase(),
-    appVersion: map.appVersion ?? map.app_version ?? commonAppVersion ?? null
+    appVersion: map.appVersion ?? map.app_version ?? commonAppVersion ?? null,
+    variantKey: optionalString(map.variantKey ?? map.variant_key ?? map.variant),
+    version: optionalPositiveInteger(map.mapVersion ?? map.map_version ?? map.version ?? commonMapVersion, "map.version"),
+    defaultVariant: optionalBoolean(map.defaultVariant ?? map.default_variant, "map.defaultVariant")
   };
 }
 
@@ -400,6 +437,48 @@ function numericValue(value, name) {
   }
 
   return parsed;
+}
+
+function optionalPositiveInteger(value, name) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(`${name} must be a positive integer, got "${value}".`);
+  }
+
+  return parsed;
+}
+
+function optionalBoolean(value, name) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+  if (["true", "1", "yes"].includes(normalized)) {
+    return true;
+  }
+  if (["false", "0", "no"].includes(normalized)) {
+    return false;
+  }
+
+  throw new Error(`${name} must be true or false.`);
+}
+
+function optionalString(value) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  const string = String(value).trim();
+  return string === "" ? null : string;
 }
 
 function mimeTypeForImage(filename) {
@@ -1085,6 +1164,7 @@ Environment:
   TESTING_FLOOR_ORGANIZATION_ID Organization slug or numeric id
   TESTING_FLOOR_GAME_ID         Numeric game id
   TESTING_FLOOR_VERSION         Build version / map app_version metadata
+  TESTING_FLOOR_MAP_VERSION     Telemetry map version number
   TESTING_FLOOR_GIT_SHA         Git SHA metadata (builds)
   TESTING_FLOOR_BUTLER_PATH     Path to butler for wharf uploads
 
@@ -1108,6 +1188,10 @@ Map options:
   --horizontal-axis <axis>  Horizontal world axis (x|y|z), defaults to x
   --vertical-axis <axis>    Vertical world axis (x|y|z), defaults to z
   --app-version <version>   App version associated with this map snapshot
+  --map-version <number>    Telemetry map version number to update
+  --variant-key <key>       Variant key for floors, modes, or alternate map views
+  --variant <key>           Alias for --variant-key
+  --default-variant <bool>  Whether this variant is the default for the version
 
 Common options:
   --api-url <url>           Testing Floor base URL
