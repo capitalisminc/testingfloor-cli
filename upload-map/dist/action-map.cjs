@@ -54,7 +54,11 @@ function writeOutput(name, value, env) {
 }
 
 // src/cli.js
+var import_node_crypto = require("node:crypto");
+var import_node_fs2 = require("node:fs");
 var import_promises = require("node:fs/promises");
+var import_node_http = __toESM(require("node:http"), 1);
+var import_node_https = __toESM(require("node:https"), 1);
 var import_node_path = __toESM(require("node:path"), 1);
 var import_node_process2 = __toESM(require("node:process"), 1);
 var DEFAULT_API_URL = "https://api.testingfloor.com";
@@ -137,30 +141,40 @@ function parseBoundsString(raw) {
 }
 async function uploadMap(plan, map, { log = console.error } = {}) {
   log(`Uploading map ${map.levelId} from ${map.imagePath}`);
-  const formData = new FormData();
-  formData.append("level_id", map.levelId);
-  formData.append("bounds[center_x]", String(map.bounds.centerX));
-  formData.append("bounds[center_z]", String(map.bounds.centerZ));
-  formData.append("bounds[size_x]", String(map.bounds.sizeX));
-  formData.append("bounds[size_z]", String(map.bounds.sizeZ));
-  formData.append("map_horizontal_axis", map.horizontalAxis);
-  formData.append("map_vertical_axis", map.verticalAxis);
-  if (map.appVersion) {
-    formData.append("app_version", map.appVersion);
+  const image = await pathInfo(map.imagePath, { allowDirectory: false, label: "Map image" });
+  const hashes = await hashFile(map.imagePath);
+  const directUploadResponse = await postJson(gameApiUrl(plan, "/maps/direct_uploads"), plan.token, {
+    filename: map.imageFilename,
+    byte_size: image.size,
+    checksum: hashes.md5Base64,
+    content_type: map.imageMimeType
+  });
+  const imageUpload = directUploadResponse.image;
+  if (!imageUpload?.signed_id) {
+    throw new Error("Map direct upload response is missing image.signed_id.");
   }
-  if (map.variantKey) {
-    formData.append("variant_key", map.variantKey);
+  if (!imageUpload.upload_url) {
+    throw new Error("Map direct upload response is missing image.upload_url.");
   }
-  if (map.version) {
-    formData.append("version", String(map.version));
-  }
-  if (map.defaultVariant !== null && map.defaultVariant !== void 0) {
-    formData.append("default_variant", map.defaultVariant ? "true" : "false");
-  }
-  const imageBytes = await (0, import_promises.readFile)(map.imagePath);
-  const imageBlob = new Blob([imageBytes], { type: map.imageMimeType });
-  formData.append("image", imageBlob, map.imageFilename);
-  const response = await postFormData(gameApiUrl(plan, "/maps"), plan.token, formData);
+  await uploadFile(imageUpload.upload_url, imageUpload.upload_headers ?? {}, map.imagePath, image.size, {
+    label: "Map image direct upload"
+  });
+  const response = await postJson(gameApiUrl(plan, "/maps"), plan.token, {
+    level_id: map.levelId,
+    bounds: {
+      center_x: map.bounds.centerX,
+      center_z: map.bounds.centerZ,
+      size_x: map.bounds.sizeX,
+      size_z: map.bounds.sizeZ
+    },
+    map_horizontal_axis: map.horizontalAxis,
+    map_vertical_axis: map.verticalAxis,
+    app_version: map.appVersion || void 0,
+    variant_key: map.variantKey || void 0,
+    version: map.version || void 0,
+    default_variant: map.defaultVariant === null || map.defaultVariant === void 0 ? void 0 : map.defaultVariant,
+    image_signed_id: imageUpload.signed_id
+  });
   return {
     id: response.id,
     levelId: response.level_id ?? map.levelId,
@@ -312,11 +326,71 @@ async function readJson(filePath) {
     throw new Error(`Could not parse ${filePath}: ${error.message}`);
   }
 }
-async function postFormData(url, token, formData) {
+async function pathInfo(filePath, { allowDirectory, label }) {
+  let stats;
+  try {
+    await (0, import_promises.access)(filePath);
+    stats = await (0, import_promises.stat)(filePath);
+  } catch {
+    throw new Error(`${label} not found: ${filePath}`);
+  }
+  if (stats.isDirectory()) {
+    if (!allowDirectory) {
+      throw new Error(`${label} must be a file: ${filePath}`);
+    }
+    const size = await directorySize(filePath);
+    if (size <= 0) {
+      throw new Error(`${label} directory is empty: ${filePath}`);
+    }
+    return { ...stats, size };
+  }
+  if (!stats.isFile()) {
+    throw new Error(`${label} must be a file${allowDirectory ? " or directory" : ""}: ${filePath}`);
+  }
+  if (stats.size <= 0) {
+    throw new Error(`${label} is empty: ${filePath}`);
+  }
+  return stats;
+}
+async function directorySize(dir) {
+  let total = 0;
+  const handle = await (0, import_promises.opendir)(dir);
+  for await (const entry of handle) {
+    const fullPath = import_node_path.default.join(dir, entry.name);
+    const entryStats = await (0, import_promises.stat)(fullPath);
+    if (entryStats.isDirectory()) {
+      total += await directorySize(fullPath);
+    } else if (entryStats.isFile()) {
+      total += entryStats.size;
+    }
+  }
+  return total;
+}
+async function hashFile(filePath) {
+  const md5 = (0, import_node_crypto.createHash)("md5");
+  const sha256 = (0, import_node_crypto.createHash)("sha256");
+  await new Promise((resolve, reject) => {
+    const stream = (0, import_node_fs2.createReadStream)(filePath);
+    stream.on("data", (chunk) => {
+      md5.update(chunk);
+      sha256.update(chunk);
+    });
+    stream.on("error", reject);
+    stream.on("end", resolve);
+  });
+  return {
+    md5Base64: md5.digest("base64"),
+    sha256Hex: sha256.digest("hex")
+  };
+}
+async function postJson(url, token, body) {
   const response = await fetch(url, {
     method: "POST",
-    headers: { "Authorization": `Bearer ${token}` },
-    body: formData
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(compact(body))
   });
   const text = await response.text();
   const parsed = text ? parseJsonResponse(text, url) : {};
@@ -324,6 +398,40 @@ async function postFormData(url, token, formData) {
     throw new Error(parsed.error || `${response.status} ${response.statusText} from ${url}`);
   }
   return parsed;
+}
+function uploadFile(uploadUrl, uploadHeaders, filePath, size, { start, end, label = "Upload" } = {}) {
+  const url = new URL(uploadUrl);
+  const client = url.protocol === "https:" ? import_node_https.default : import_node_http.default;
+  const headers = compactHeaders({ ...uploadHeaders, "Content-Length": String(size) });
+  return new Promise((resolve, reject) => {
+    const request = client.request(url, { method: "PUT", headers }, (response) => {
+      let body = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => {
+        body += chunk;
+      });
+      response.on("end", () => {
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          resolve(response.headers);
+        } else {
+          reject(new Error(`${label} failed with ${response.statusCode}: ${body}`));
+        }
+      });
+    });
+    request.on("error", reject);
+    (0, import_node_fs2.createReadStream)(filePath, streamOptions({ start, end })).on("error", reject).pipe(request);
+  });
+}
+function compactHeaders(headers) {
+  return Object.fromEntries(
+    Object.entries(headers).filter(([, value]) => value !== void 0 && value !== null && value !== "")
+  );
+}
+function streamOptions({ start, end }) {
+  return compact({ start, end });
+}
+function compact(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
 function parseJsonResponse(text, url) {
   try {

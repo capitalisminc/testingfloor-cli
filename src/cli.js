@@ -284,32 +284,43 @@ export function parseBoundsString(raw) {
 export async function uploadMap(plan, map, { log = console.error } = {}) {
   log(`Uploading map ${map.levelId} from ${map.imagePath}`);
 
-  const formData = new FormData();
-  formData.append("level_id", map.levelId);
-  formData.append("bounds[center_x]", String(map.bounds.centerX));
-  formData.append("bounds[center_z]", String(map.bounds.centerZ));
-  formData.append("bounds[size_x]", String(map.bounds.sizeX));
-  formData.append("bounds[size_z]", String(map.bounds.sizeZ));
-  formData.append("map_horizontal_axis", map.horizontalAxis);
-  formData.append("map_vertical_axis", map.verticalAxis);
-  if (map.appVersion) {
-    formData.append("app_version", map.appVersion);
+  const image = await pathInfo(map.imagePath, { allowDirectory: false, label: "Map image" });
+  const hashes = await hashFile(map.imagePath);
+  const directUploadResponse = await postJson(gameApiUrl(plan, "/maps/direct_uploads"), plan.token, {
+    filename: map.imageFilename,
+    byte_size: image.size,
+    checksum: hashes.md5Base64,
+    content_type: map.imageMimeType
+  });
+  const imageUpload = directUploadResponse.image;
+  if (!imageUpload?.signed_id) {
+    throw new Error("Map direct upload response is missing image.signed_id.");
   }
-  if (map.variantKey) {
-    formData.append("variant_key", map.variantKey);
-  }
-  if (map.version) {
-    formData.append("version", String(map.version));
-  }
-  if (map.defaultVariant !== null && map.defaultVariant !== undefined) {
-    formData.append("default_variant", map.defaultVariant ? "true" : "false");
+  if (!imageUpload.upload_url) {
+    throw new Error("Map direct upload response is missing image.upload_url.");
   }
 
-  const imageBytes = await readFile(map.imagePath);
-  const imageBlob = new Blob([imageBytes], { type: map.imageMimeType });
-  formData.append("image", imageBlob, map.imageFilename);
+  await uploadFile(imageUpload.upload_url, imageUpload.upload_headers ?? {}, map.imagePath, image.size, {
+    label: "Map image direct upload"
+  });
 
-  const response = await postFormData(gameApiUrl(plan, "/maps"), plan.token, formData);
+  const response = await postJson(gameApiUrl(plan, "/maps"), plan.token, {
+    level_id: map.levelId,
+    bounds: {
+      center_x: map.bounds.centerX,
+      center_z: map.bounds.centerZ,
+      size_x: map.bounds.sizeX,
+      size_z: map.bounds.sizeZ
+    },
+    map_horizontal_axis: map.horizontalAxis,
+    map_vertical_axis: map.verticalAxis,
+    app_version: map.appVersion || undefined,
+    variant_key: map.variantKey || undefined,
+    version: map.version || undefined,
+    default_variant:
+      map.defaultVariant === null || map.defaultVariant === undefined ? undefined : map.defaultVariant,
+    image_signed_id: imageUpload.signed_id
+  });
 
   return {
     id: response.id,
@@ -931,22 +942,6 @@ async function getJson(url, token) {
   const response = await fetch(url, {
     method: "GET",
     headers: { "Authorization": `Bearer ${token}` }
-  });
-
-  const text = await response.text();
-  const parsed = text ? parseJsonResponse(text, url) : {};
-  if (!response.ok) {
-    throw new Error(parsed.error || `${response.status} ${response.statusText} from ${url}`);
-  }
-
-  return parsed;
-}
-
-async function postFormData(url, token, formData) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${token}` },
-    body: formData
   });
 
   const text = await response.text();

@@ -4948,7 +4948,7 @@ var require_formdata = __commonJS({
     var { File: NativeFile } = require("node:buffer");
     var nodeUtil = require("node:util");
     var File = globalThis.File ?? NativeFile;
-    var FormData2 = class _FormData {
+    var FormData = class _FormData {
       constructor(form) {
         webidl.util.markAsUncloneable(this);
         if (form !== void 0) {
@@ -5050,8 +5050,8 @@ var require_formdata = __commonJS({
         return `FormData ${output.slice(output.indexOf("]") + 2)}`;
       }
     };
-    iteratorMixin("FormData", FormData2, kState, "name", "value");
-    Object.defineProperties(FormData2.prototype, {
+    iteratorMixin("FormData", FormData, kState, "name", "value");
+    Object.defineProperties(FormData.prototype, {
       append: kEnumerableProperty,
       delete: kEnumerableProperty,
       get: kEnumerableProperty,
@@ -5079,7 +5079,7 @@ var require_formdata = __commonJS({
       }
       return { name, value };
     }
-    module2.exports = { FormData: FormData2, makeEntry };
+    module2.exports = { FormData, makeEntry };
   }
 });
 
@@ -5349,7 +5349,7 @@ var require_body = __commonJS({
       extractMimeType,
       utf8DecodeBytes
     } = require_util2();
-    var { FormData: FormData2 } = require_formdata();
+    var { FormData } = require_formdata();
     var { kState } = require_symbols2();
     var { webidl } = require_webidl();
     var { Blob: Blob2 } = require("node:buffer");
@@ -5569,13 +5569,13 @@ Content-Type: ${value.type || "application/octet-stream"}\r
                   if (parsed === "failure") {
                     throw new TypeError("Failed to parse body as FormData.");
                   }
-                  const fd = new FormData2();
+                  const fd = new FormData();
                   fd[kState] = parsed;
                   return fd;
                 }
                 case "application/x-www-form-urlencoded": {
                   const entries = new URLSearchParams(value.toString());
-                  const fd = new FormData2();
+                  const fd = new FormData();
                   for (const [name, value2] of entries) {
                     fd.append(name, value2);
                   }
@@ -12113,7 +12113,7 @@ var require_response = __commonJS({
     } = require_constants3();
     var { kState, kHeaders } = require_symbols2();
     var { webidl } = require_webidl();
-    var { FormData: FormData2 } = require_formdata();
+    var { FormData } = require_formdata();
     var { URLSerializer } = require_data_url();
     var { kConstruct } = require_symbols();
     var assert = require("node:assert");
@@ -12426,7 +12426,7 @@ var require_response = __commonJS({
       ReadableStream
     );
     webidl.converters.FormData = webidl.interfaceConverter(
-      FormData2
+      FormData
     );
     webidl.converters.URLSearchParams = webidl.interfaceConverter(
       URLSearchParams

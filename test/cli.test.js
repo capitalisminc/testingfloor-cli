@@ -891,39 +891,76 @@ test("resolveMapPlan requires an organization id", async () => {
   );
 });
 
-test("uploadMap posts multipart form data and returns the created map", async (t) => {
+test("uploadMap uses direct upload and returns the created map", async (t) => {
   const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
   const imagePath = path.join(cwd, "factory.png");
   await writeFile(imagePath, "png-bytes");
 
-  let receivedBody = null;
-  let receivedAuth = null;
-  let receivedContentType = null;
+  const requests = [];
+  let directUploadPayload = null;
+  let mapPayload = null;
+  let uploadedImageBody = null;
+  let uploadContentLength = null;
+  let uploadContentMd5 = null;
+  let uploadContentType = null;
   const server = http.createServer(async (request, response) => {
-    if (request.method === "POST" && request.url === "/api/organizations/gamedepartment/games/42/maps") {
-      receivedAuth = request.headers["authorization"];
-      receivedContentType = request.headers["content-type"];
-      receivedBody = await readRequestBody(request);
-      writeJson(response, 201, {
-        id: 11,
-        level_id: "factory",
-        version: 1,
-        pinned: true,
-        app_version: "0.4.12",
-        variant_key: "ground-floor",
-        variant_label: "Ground floor",
-        default_variant: true,
-        bounds: { center_x: 0, center_z: 0, size_x: 200, size_z: 200 },
-        map_horizontal_axis: "x",
-        map_vertical_axis: "z",
-        configured: true,
-        created: true
-      });
-      return;
-    }
+    try {
+      requests.push(`${request.method} ${request.url}`);
+      if (request.method === "POST" && request.url === "/api/organizations/gamedepartment/games/42/maps/direct_uploads") {
+        assert.equal(request.headers["authorization"], "Bearer tf_test");
+        assert.match(request.headers["content-type"] ?? "", /^application\/json/);
+        directUploadPayload = JSON.parse(await readRequestBody(request));
+        writeJson(response, 200, {
+          image: {
+            signed_id: "signed-map-image",
+            upload_url: `${serverUrl(server)}/direct-map-image`,
+            upload_headers: {
+              "Content-Type": "image/png",
+              "Content-MD5": "6MDii0K9L0jqNMzcZZP4ig=="
+            }
+          }
+        });
+        return;
+      }
 
-    response.writeHead(404);
-    response.end();
+      if (request.method === "PUT" && request.url === "/direct-map-image") {
+        uploadedImageBody = await readRequestBody(request);
+        uploadContentLength = request.headers["content-length"];
+        uploadContentMd5 = request.headers["content-md5"];
+        uploadContentType = request.headers["content-type"];
+        response.writeHead(200);
+        response.end();
+        return;
+      }
+
+      if (request.method === "POST" && request.url === "/api/organizations/gamedepartment/games/42/maps") {
+        assert.equal(request.headers["authorization"], "Bearer tf_test");
+        assert.match(request.headers["content-type"] ?? "", /^application\/json/);
+        mapPayload = JSON.parse(await readRequestBody(request));
+        writeJson(response, 201, {
+          id: 11,
+          level_id: "factory",
+          version: 1,
+          pinned: true,
+          app_version: "0.4.12",
+          variant_key: "ground-floor",
+          variant_label: "Ground floor",
+          default_variant: true,
+          bounds: { center_x: 0, center_z: 0, size_x: 200, size_z: 200 },
+          map_horizontal_axis: "x",
+          map_vertical_axis: "z",
+          configured: true,
+          created: true
+        });
+        return;
+      }
+
+      response.writeHead(404);
+      response.end();
+    } catch (error) {
+      response.writeHead(500);
+      response.end(error.stack);
+    }
   });
   await listen(server);
   t.after(() => server.close());
@@ -955,18 +992,37 @@ test("uploadMap posts multipart form data and returns the created map", async (t
   assert.equal(result.variantLabel, "Ground floor");
   assert.equal(result.defaultVariant, true);
   assert.equal(result.created, true);
-  assert.equal(receivedAuth, "Bearer tf_test");
-  assert.match(receivedContentType ?? "", /^multipart\/form-data; boundary=/);
-  assert.match(receivedBody ?? "", /name="level_id"\r\n\r\nfactory\r\n/);
-  assert.match(receivedBody ?? "", /name="bounds\[center_x\]"\r\n\r\n0\r\n/);
-  assert.match(receivedBody ?? "", /name="bounds\[size_x\]"\r\n\r\n200\r\n/);
-  assert.match(receivedBody ?? "", /name="map_horizontal_axis"\r\n\r\nx\r\n/);
-  assert.match(receivedBody ?? "", /name="map_vertical_axis"\r\n\r\nz\r\n/);
-  assert.match(receivedBody ?? "", /name="app_version"\r\n\r\n0\.4\.12\r\n/);
-  assert.match(receivedBody ?? "", /name="variant_key"\r\n\r\nground-floor\r\n/);
-  assert.match(receivedBody ?? "", /name="version"\r\n\r\n1\r\n/);
-  assert.match(receivedBody ?? "", /name="default_variant"\r\n\r\ntrue\r\n/);
-  assert.match(receivedBody ?? "", /name="image"; filename="factory\.png"\r\nContent-Type: image\/png\r\n\r\npng-bytes\r\n/);
+  assert.deepEqual(requests, [
+    "POST /api/organizations/gamedepartment/games/42/maps/direct_uploads",
+    "PUT /direct-map-image",
+    "POST /api/organizations/gamedepartment/games/42/maps"
+  ]);
+  assert.deepEqual(directUploadPayload, {
+    filename: "factory.png",
+    byte_size: 9,
+    checksum: "6MDii0K9L0jqNMzcZZP4ig==",
+    content_type: "image/png"
+  });
+  assert.equal(uploadedImageBody, "png-bytes");
+  assert.equal(uploadContentLength, "9");
+  assert.equal(uploadContentMd5, "6MDii0K9L0jqNMzcZZP4ig==");
+  assert.equal(uploadContentType, "image/png");
+  assert.deepEqual(mapPayload, {
+    level_id: "factory",
+    bounds: {
+      center_x: 0,
+      center_z: 0,
+      size_x: 200,
+      size_z: 200
+    },
+    map_horizontal_axis: "x",
+    map_vertical_axis: "z",
+    app_version: "0.4.12",
+    variant_key: "ground-floor",
+    version: 1,
+    default_variant: true,
+    image_signed_id: "signed-map-image"
+  });
 });
 
 test("readMapInputs assembles bounds from four scalar inputs", () => {
