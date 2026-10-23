@@ -538,7 +538,7 @@ export function parseSourceRefEntries(entries) {
 // then the folder as content-addressed chunks plus a manifest, which Testing
 // Floor's build-delivery Worker streams as the zip download. Only chunks the
 // game hasn't stored before are uploaded.
-export async function uploadBuild(plan, build, { log = console.error, pollIntervalMs } = {}) {
+export async function uploadBuild(plan, build, { log = console.error, pollIntervalMs, retryDelaysMs = REQUEST_RETRY_DELAYS_MS } = {}) {
   const source = await pathInfo(build.buildDirectory, { allowDirectory: true, label: "Build directory" });
   if (!(await stat(build.buildDirectory)).isDirectory()) {
     throw new Error(`Build directory must be a folder, not a file: ${build.buildDirectory}`);
@@ -547,7 +547,7 @@ export async function uploadBuild(plan, build, { log = console.error, pollInterv
 
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "testingfloor-wharf-"));
   try {
-    const base = await fetchWharfBase(plan, build);
+    const base = await fetchWharfBase(plan, build, { retryDelaysMs });
     const targetSignaturePath = base.signatureUrl
       ? await downloadBaseSignature(base.signatureUrl, tempDir)
       : "/dev/null";
@@ -611,7 +611,7 @@ export async function uploadBuild(plan, build, { log = console.error, pollInterv
     );
 
     const buildId = completeResponse.id ?? createResponse.id;
-    const manifest = await uploadChunkManifest(plan, buildId, build.buildDirectory, { log, pollIntervalMs });
+    const manifest = await uploadChunkManifest(plan, buildId, build.buildDirectory, { log, pollIntervalMs, retryDelaysMs });
 
     return {
       buildId,
@@ -630,7 +630,7 @@ export async function uploadBuild(plan, build, { log = console.error, pollInterv
   }
 }
 
-async function fetchWharfBase(plan, build) {
+async function fetchWharfBase(plan, build, { retryDelaysMs }) {
   const query = new URLSearchParams({ platform: build.platform });
   if (build.branch) {
     query.set("branch", build.branch);
@@ -638,7 +638,8 @@ async function fetchWharfBase(plan, build) {
   query.set("zip_delivery", "chunk_manifest");
   const response = await getJson(
     gameApiUrl(plan, `/builds/wharf/base?${query.toString()}`),
-    plan.token
+    plan.token,
+    { retryDelaysMs }
   );
   return {
     buildId: response.build_id ?? response.buildId ?? null,
@@ -653,7 +654,7 @@ const MANIFEST_VERIFY_TIMEOUT_MS = 45 * 60 * 1000;
 // Uploads the build folder as chunks plus a manifest, then waits until
 // Testing Floor has verified every chunk and file checksum. Only chunks the
 // game hasn't stored before are uploaded.
-async function uploadChunkManifest(plan, buildId, buildDirectory, { log, pollIntervalMs = 5000 }) {
+async function uploadChunkManifest(plan, buildId, buildDirectory, { log, pollIntervalMs = 5000, retryDelaysMs }) {
   log(`Splitting ${buildDirectory} into chunks for zip downloads`);
   const { entries, objects } = await chunkBuildDirectory(buildDirectory);
   const objectList = [...objects.entries()];
@@ -663,9 +664,10 @@ async function uploadChunkManifest(plan, buildId, buildDirectory, { log, pollInt
   const missing = [];
   for (let index = 0; index < objectList.length; index += CHUNK_ANNOUNCE_BATCH) {
     const batch = objectList.slice(index, index + CHUNK_ANNOUNCE_BATCH);
+    // Safe to repeat: announcing a chunk again just presigns it again.
     const response = await postJson(`${plan.apiUrl}/api/game_builds/${buildId}/chunks`, plan.token, {
       chunks: batch.map(([sha256, object]) => ({ sha256, byte_size: object.size }))
-    });
+    }, { retryDelaysMs });
     missing.push(...(response.missing ?? []));
   }
 
@@ -678,25 +680,36 @@ async function uploadChunkManifest(plan, buildId, buildDirectory, { log, pollInt
     })
   );
 
+  // Safe to repeat: sending the manifest again replaces the pending one.
   await postJson(`${plan.apiUrl}/api/game_builds/${buildId}/manifest`, plan.token, {
     manifest: { modified_at: new Date().toISOString(), entries }
-  });
+  }, { retryDelaysMs });
 
   log("Waiting for Testing Floor to verify the chunks");
   const deadline = Date.now() + MANIFEST_VERIFY_TIMEOUT_MS;
   for (;;) {
-    const status = await getJson(`${plan.apiUrl}/api/game_builds/${buildId}/manifest`, plan.token);
-    if (status.status === "verified") {
+    let status = null;
+    try {
+      status = await getJson(`${plan.apiUrl}/api/game_builds/${buildId}/manifest`, plan.token, { retryDelaysMs });
+    } catch (error) {
+      // The build is already uploaded, so a check that doesn't get through
+      // is no reason to give up: keep checking until the deadline.
+      if (!(error instanceof TransientRequestError) || Date.now() > deadline) {
+        throw error;
+      }
+      log(`Couldn't check verification just now (${error.message}); still waiting`);
+    }
+    if (status?.status === "verified") {
       log(`Zip download ready (${formatBytes(status.zip_size_bytes ?? 0)})`);
       return status;
     }
-    if (status.status === "failed") {
+    if (status?.status === "failed") {
       throw new Error(`Testing Floor rejected build ${buildId}'s chunks: ${status.error}`);
     }
     if (Date.now() > deadline) {
       throw new Error(`Timed out waiting for Testing Floor to verify build ${buildId}'s chunks`);
     }
-    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    await sleep(pollIntervalMs);
   }
 }
 
@@ -973,38 +986,75 @@ async function hashFile(filePath) {
   };
 }
 
-async function postJson(url, token, body) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(compact(body))
-  });
+// Waits before each retry of a request that's safe to repeat. About 15
+// seconds in all, enough to ride out a dropped connection or a deploy.
+const REQUEST_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000];
+const RETRYABLE_STATUSES = new Set([408, 429]);
 
-  const text = await response.text();
-  const parsed = text ? parseJsonResponse(text, url) : {};
-  if (!response.ok) {
-    throw new Error(parsed.error || `${response.status} ${response.statusText} from ${url}`);
-  }
+// A request that got no answer, or an answer saying the server is busy or
+// failing. Repeating it may work; repeating any other 4xx won't.
+class TransientRequestError extends Error {}
 
-  return parsed;
+// POSTs don't retry unless the caller passes retryDelaysMs: only some are
+// safe to repeat (creating a build twice makes two builds).
+async function postJson(url, token, body, { retryDelaysMs = [] } = {}) {
+  return withRequestRetries(retryDelaysMs, () =>
+    requestJson(url, token, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(compact(body))
+    })
+  );
 }
 
-async function getJson(url, token) {
-  const response = await fetch(url, {
-    method: "GET",
-    headers: { "Authorization": `Bearer ${token}` }
-  });
+async function getJson(url, token, { retryDelaysMs = REQUEST_RETRY_DELAYS_MS } = {}) {
+  return withRequestRetries(retryDelaysMs, () => requestJson(url, token, { method: "GET" }));
+}
 
-  const text = await response.text();
-  const parsed = text ? parseJsonResponse(text, url) : {};
-  if (!response.ok) {
-    throw new Error(parsed.error || `${response.status} ${response.statusText} from ${url}`);
+async function requestJson(url, token, { method, headers = {}, body }) {
+  let response;
+  let text;
+  try {
+    response = await fetch(url, { method, headers: { "Authorization": `Bearer ${token}`, ...headers }, body });
+    text = await response.text();
+  } catch (error) {
+    throw new TransientRequestError(`couldn't reach ${url}: ${error.cause?.code ?? error.cause?.message ?? error.message}`);
   }
 
-  return parsed;
+  if (!response.ok) {
+    const message = jsonError(text) || `${response.status} ${response.statusText} from ${url}`;
+    const transient = response.status >= 500 || RETRYABLE_STATUSES.has(response.status);
+    throw transient ? new TransientRequestError(message) : new Error(message);
+  }
+
+  return text ? parseJsonResponse(text, url) : {};
+}
+
+async function withRequestRetries(delaysMs, send) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await send();
+    } catch (error) {
+      if (!(error instanceof TransientRequestError) || attempt >= delaysMs.length) {
+        throw error;
+      }
+      await sleep(delaysMs[attempt]);
+    }
+  }
+}
+
+// An error response's message, when it's JSON with one. Proxies answer
+// failures with HTML, which isn't an error from Testing Floor itself.
+function jsonError(text) {
+  try {
+    return JSON.parse(text)?.error;
+  } catch {
+    return null;
+  }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function uploadMultipartFile(multipartUpload, filePath, size, { log = console.error } = {}) {

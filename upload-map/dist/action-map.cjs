@@ -408,21 +408,56 @@ async function hashFile(filePath) {
     sha256Hex: sha256.digest("hex")
   };
 }
-async function postJson(url, token, body) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(compact(body))
-  });
-  const text = await response.text();
-  const parsed = text ? parseJsonResponse(text, url) : {};
-  if (!response.ok) {
-    throw new Error(parsed.error || `${response.status} ${response.statusText} from ${url}`);
+var RETRYABLE_STATUSES = /* @__PURE__ */ new Set([408, 429]);
+var TransientRequestError = class extends Error {
+};
+async function postJson(url, token, body, { retryDelaysMs = [] } = {}) {
+  return withRequestRetries(
+    retryDelaysMs,
+    () => requestJson(url, token, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(compact(body))
+    })
+  );
+}
+async function requestJson(url, token, { method, headers = {}, body }) {
+  let response;
+  let text;
+  try {
+    response = await fetch(url, { method, headers: { "Authorization": `Bearer ${token}`, ...headers }, body });
+    text = await response.text();
+  } catch (error) {
+    throw new TransientRequestError(`couldn't reach ${url}: ${error.cause?.code ?? error.cause?.message ?? error.message}`);
   }
-  return parsed;
+  if (!response.ok) {
+    const message = jsonError(text) || `${response.status} ${response.statusText} from ${url}`;
+    const transient = response.status >= 500 || RETRYABLE_STATUSES.has(response.status);
+    throw transient ? new TransientRequestError(message) : new Error(message);
+  }
+  return text ? parseJsonResponse(text, url) : {};
+}
+async function withRequestRetries(delaysMs, send) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await send();
+    } catch (error) {
+      if (!(error instanceof TransientRequestError) || attempt >= delaysMs.length) {
+        throw error;
+      }
+      await sleep(delaysMs[attempt]);
+    }
+  }
+}
+function jsonError(text) {
+  try {
+    return JSON.parse(text)?.error;
+  } catch {
+    return null;
+  }
+}
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 function uploadFile(uploadUrl, uploadHeaders, filePath, size, { start, end, label = "Upload" } = {}) {
   const url = new URL(uploadUrl);

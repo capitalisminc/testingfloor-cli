@@ -48,6 +48,8 @@ You point the CLI at the ready-to-run build folder; there's nothing else to choo
 
 The first upload sends the whole build, uncompressed; later builds send only what changed.
 
+Requests that are safe to repeat are retried when the connection drops or Testing Floor answers with a server error: chunk uploads, the chunk and manifest requests, and status checks. Waiting for verification keeps going through failed checks until its 45-minute limit. Creating and completing a build aren't retried, because repeating them could make a second build or fail on one that already finished.
+
 ## Multiple Platforms
 
 Create `testingfloor-builds.json`:
