@@ -61,6 +61,30 @@ var import_node_http = __toESM(require("node:http"), 1);
 var import_node_https = __toESM(require("node:https"), 1);
 var import_node_path = __toESM(require("node:path"), 1);
 var import_node_process2 = __toESM(require("node:process"), 1);
+
+// src/chunks.js
+var CHUNKING = Object.freeze({
+  minSize: 1 << 20,
+  maskBits: 21,
+  maxSize: 8 << 20,
+  packThreshold: 256 << 10,
+  packTarget: 4 << 20
+});
+var GEAR = (() => {
+  const table = new Uint32Array(256);
+  let x = 2654435769;
+  for (let index = 0; index < 256; index += 1) {
+    x ^= x << 13;
+    x >>>= 0;
+    x ^= x >>> 17;
+    x ^= x << 5;
+    x >>>= 0;
+    table[index] = x;
+  }
+  return table;
+})();
+
+// src/cli.js
 var DEFAULT_API_URL = "https://api.testingfloor.com";
 var AXES = /* @__PURE__ */ new Set(["x", "y", "z"]);
 var IMAGE_MIME_TYPES = {
@@ -318,6 +342,7 @@ function optionalString(value) {
 function mimeTypeForImage(filename) {
   return IMAGE_MIME_TYPES[import_node_path.default.extname(filename).toLowerCase()] ?? null;
 }
+var MANIFEST_VERIFY_TIMEOUT_MS = 45 * 60 * 1e3;
 async function readJson(filePath) {
   const raw = await (0, import_promises.readFile)(filePath, "utf8");
   try {

@@ -1,13 +1,10 @@
-import { createReadStream, createWriteStream } from "node:fs";
-import { access, chmod, lstat, mkdir, opendir, readlink, stat } from "node:fs/promises";
+import { chmod } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { finished } from "node:stream/promises";
 
 import { addPath } from "@actions/core";
 import { cacheFile, downloadTool, extractZip, find as findTool } from "@actions/tool-cache";
-import ZipStream from "zip-stream";
 import { input, requiredInput, writeOutput } from "./action-io.js";
 import { resolveUploadPlan, uploadBuild } from "./cli.js";
 
@@ -19,26 +16,15 @@ export async function runAction(env = process.env, cwd = process.cwd()) {
   const inputs = readInputs(env);
   const build = resolveActionBuild(inputs, cwd, env);
   const butlerPath = await resolveActionButlerPath({
-    archiveKind: build.archiveKind,
     butlerPath: inputs.butlerPath,
     butlerVersion: inputs.butlerVersion,
     env
   });
-  const archivePath = build.archivePath ?? (
-    build.archiveKind === "wharf"
-      ? build.buildDirectory
-      : await zipBuildDirectory({
-        buildDirectory: build.buildDirectory,
-        archiveName: build.filename,
-        runnerTemp: env.RUNNER_TEMP ?? os.tmpdir()
-      })
-  );
 
   const plan = await resolveUploadPlan(
     {
       apiUrl: inputs.apiUrl,
-      archive: archivePath,
-      archiveKind: inputs.archiveKind,
+      buildDirectory: build.buildDirectory,
       branch: inputs.branch,
       butlerPath,
       filename: build.filename,
@@ -65,16 +51,20 @@ export async function runAction(env = process.env, cwd = process.cwd()) {
   writeOutput("size-bytes", result.sizeBytes, env);
 }
 
+// archive-kind is still declared (deprecated) so old workflows only get a
+// warning; its value no longer matters.
 export function readInputs(env) {
+  if (input(env, "archive")) {
+    throw new Error("The archive input was removed. Set build-directory to the unzipped build folder.");
+  }
+
   return {
     apiToken: requiredInput(env, "api-token"),
     apiUrl: input(env, "api-url") || "https://api.testingfloor.com",
-    archive: input(env, "archive"),
-    archiveKind: input(env, "archive-kind") || "zip",
     branch: input(env, "branch") || undefined,
     butlerPath: input(env, "butler-path"),
     butlerVersion: input(env, "butler-version") || "LATEST",
-    buildDirectory: input(env, "build-directory"),
+    buildDirectory: requiredInput(env, "build-directory"),
     filename: input(env, "filename"),
     gameId: requiredInput(env, "game-id"),
     gitSha: input(env, "git-sha"),
@@ -89,16 +79,11 @@ export function readInputs(env) {
 }
 
 export async function resolveActionButlerPath({
-  archiveKind,
   butlerPath,
   butlerVersion = "LATEST",
   env = process.env,
   setup = setupButler
 } = {}) {
-  if (archiveKind !== "wharf") {
-    return butlerPath;
-  }
-
   if (butlerPath) {
     return butlerPath;
   }
@@ -171,20 +156,13 @@ function isCacheableButlerVersion(version) {
 }
 
 export function resolveActionBuild(inputs, cwd = process.cwd(), env = process.env) {
-  if (!inputs.archive && !inputs.buildDirectory) {
-    throw new Error("Set either archive or build-directory.");
+  if (!inputs.buildDirectory) {
+    throw new Error("Set build-directory.");
   }
 
-  const archivePath = inputs.archive ? path.resolve(cwd, inputs.archive) : null;
-  const buildDirectory = inputs.buildDirectory ? path.resolve(cwd, inputs.buildDirectory) : null;
-  const filename = inputs.filename ||
-    (archivePath ? path.basename(archivePath) : defaultArchiveName({ env, inputs }));
-
   return {
-    archivePath,
-    buildDirectory,
-    filename,
-    archiveKind: inputs.archiveKind,
+    buildDirectory: path.resolve(cwd, inputs.buildDirectory),
+    filename: inputs.filename || defaultArchiveName({ env, inputs }),
     launchArgs: inputs.launchArgs,
     launchPath: inputs.launchPath,
     platform: inputs.platform
@@ -208,100 +186,6 @@ export function parseJsonInput(raw, name) {
   }
 
   return parsed;
-}
-
-export async function zipBuildDirectory({ buildDirectory, archiveName, runnerTemp = os.tmpdir() }) {
-  const directory = path.resolve(buildDirectory);
-  const stats = await stat(directory).catch(() => null);
-  if (!stats?.isDirectory()) {
-    throw new Error(`Build directory not found: ${directory}`);
-  }
-
-  await mkdir(runnerTemp, { recursive: true });
-  const archivePath = path.join(runnerTemp, archiveName);
-
-  await createZipArchive({ directory, archivePath });
-  await access(archivePath);
-  return archivePath;
-}
-
-async function createZipArchive({ directory, archivePath }) {
-  const archive = new ZipStream({ forceZip64: true, zlib: { level: 6 } });
-  const output = createWriteStream(archivePath);
-  archive.pipe(output);
-
-  const archiveDone = finished(archive);
-  const outputDone = finished(output);
-
-  try {
-    for await (const entry of walkArchiveEntries(directory)) {
-      if (entry.type === "directory") {
-        await addZipEntry(archive, Buffer.alloc(0), {
-          date: entry.stats.mtime,
-          mode: entry.stats.mode,
-          name: entry.name,
-          type: "directory"
-        });
-      } else if (entry.type === "symlink") {
-        await addZipEntry(archive, entry.linkname, {
-          date: entry.stats.mtime,
-          mode: entry.stats.mode,
-          name: entry.name,
-          type: "symlink"
-        });
-      } else {
-        await addZipEntry(archive, createReadStream(entry.fullPath), {
-          date: entry.stats.mtime,
-          mode: entry.stats.mode,
-          name: entry.name
-        });
-      }
-    }
-
-    archive.finish();
-    await Promise.all([archiveDone, outputDone]);
-  } catch (error) {
-    archive.destroy(error);
-    output.destroy(error);
-    await Promise.allSettled([archiveDone, outputDone]);
-    throw error;
-  }
-}
-
-async function* walkArchiveEntries(root, current = root) {
-  const directory = await opendir(current);
-
-  for await (const dirent of directory) {
-    const fullPath = path.join(current, dirent.name);
-    const stats = await lstat(fullPath);
-    const name = normalizeZipPath(path.relative(root, fullPath));
-
-    if (stats.isDirectory()) {
-      yield { fullPath, name: `${name}/`, stats, type: "directory" };
-      yield* walkArchiveEntries(root, fullPath);
-    } else if (stats.isSymbolicLink()) {
-      yield { fullPath, linkname: await readlink(fullPath), name, stats, type: "symlink" };
-    } else if (stats.isFile()) {
-      yield { fullPath, name, stats, type: "file" };
-    }
-  }
-}
-
-function addZipEntry(archive, source, data) {
-  return new Promise((resolve, reject) => {
-    archive.entry(source, data, (error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-
-      resolve();
-    });
-  });
-}
-
-function normalizeZipPath(value) {
-  return value.split(path.sep).join("/");
 }
 
 function defaultArchiveName({ env, inputs }) {

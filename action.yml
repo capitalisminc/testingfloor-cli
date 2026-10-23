@@ -1,5 +1,5 @@
 name: Upload Testing Floor build
-description: Upload a ready-to-run game build archive to Testing Floor.
+description: Upload a ready-to-run game build folder to Testing Floor.
 author: Capitalism Inc.
 
 inputs:
@@ -23,24 +23,25 @@ inputs:
     description: "Branch key on the game to upload this build to (e.g. \"unity-main\", \"ue-main\"). Defaults to the game's default branch. Unknown keys are rejected."
     required: false
   archive:
-    description: Existing zip archive to upload. If omitted, build-directory is zipped first.
+    description: Removed. Set build-directory to the unzipped build folder.
     required: false
+    deprecationMessage: The archive input was removed. Set build-directory to the unzipped build folder.
   archive-kind:
-    description: "Upload format: zip or wharf. wharf uses butler to upload patch/signature artifacts."
+    description: No longer used. Every upload sends a wharf patch for the recorder plus chunks for zip downloads.
     required: false
-    default: zip
+    deprecationMessage: archive-kind is no longer used and can be removed. Every upload sends a wharf patch for the recorder plus chunks for zip downloads.
   butler-path:
-    description: Optional path to the butler executable. For GitHub Actions wharf uploads, butler is installed automatically when omitted.
+    description: Optional path to the butler executable that makes the recorder's wharf patch. Installed automatically when omitted.
     required: false
   butler-version:
-    description: Butler version to install automatically for GitHub Actions wharf uploads.
+    description: Butler version to install automatically.
     required: false
     default: LATEST
   build-directory:
-    description: Directory to upload. For zip uploads it is zipped first; for wharf uploads it is diffed directly.
-    required: false
+    description: The ready-to-run build folder. Uploaded as deduplicated chunks (only what changed since earlier builds) that Testing Floor serves as the zip download, plus a wharf patch the desktop recorder installs from.
+    required: true
   filename:
-    description: Filename to store for the uploaded archive.
+    description: Filename for the zip download.
     required: false
   version:
     description: Build version metadata.
@@ -72,9 +73,9 @@ outputs:
   ready-at:
     description: Ready timestamp returned by Testing Floor.
   checksum-sha256:
-    description: SHA-256 checksum of the uploaded archive.
+    description: SHA-256 checksum reported by Testing Floor, when there is one.
   size-bytes:
-    description: Uploaded archive size.
+    description: Total size of the build folder.
 
 runs:
   using: node24

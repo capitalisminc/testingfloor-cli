@@ -8,6 +8,8 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
+import { chunkBuildDirectory, readObject } from "./chunks.js";
+
 const DEFAULT_API_URL = "https://api.testingfloor.com";
 const PLATFORMS = new Set(["windows", "macos", "linux"]);
 const AXES = new Set(["x", "y", "z"]);
@@ -22,9 +24,9 @@ const VALUE_OPTIONS = new Set([
   "api-url",
   "app-version",
   "archive",
-  "archive-kind",
   "bounds",
   "branch",
+  "build-directory",
   "butler-path",
   "config",
   "filename",
@@ -46,6 +48,9 @@ const VALUE_OPTIONS = new Set([
   "vertical-axis",
   "working-directory"
 ]);
+const REMOVED_OPTIONS = {
+  "archive-kind": "--archive-kind was removed. Uploads always send the build directory as chunks for zip downloads, plus a wharf patch for the recorder."
+};
 
 export async function main(argv = process.argv.slice(2), env = process.env, cwd = process.cwd()) {
   const parsed = parseArgs(argv);
@@ -118,6 +123,10 @@ export function parseArgs(argv) {
       continue;
     }
 
+    if (REMOVED_OPTIONS[name]) {
+      throw new Error(REMOVED_OPTIONS[name]);
+    }
+
     if (VALUE_OPTIONS.has(name)) {
       result.options[toCamel(name)] = inlineValue ?? takeValue(args, ++index, raw);
       continue;
@@ -137,7 +146,7 @@ export async function resolveUploadPlan(options, env = {}, cwd = process.cwd()) 
   const cliBuildRequested = Boolean(options.platform || options.archive || options.launchPath);
   const configuredBuilds = normalizeConfiguredBuilds(config);
   if (cliBuildRequested && configuredBuilds.length > 0) {
-    throw new Error("Use either --config builds or --platform/--archive flags, not both.");
+    throw new Error("Use either --config builds or --platform/--build-directory flags, not both.");
   }
 
   const apiUrl = normalizeApiUrl(
@@ -525,72 +534,16 @@ export function parseSourceRefEntries(entries) {
   }, {});
 }
 
-export async function uploadBuild(plan, build, { log = console.error } = {}) {
-  if (build.archiveKind === "wharf") {
-    return uploadWharfBuild(plan, build, { log });
+// Every build goes up the same way: a wharf patch the recorder installs from,
+// then the folder as content-addressed chunks plus a manifest, which Testing
+// Floor's build-delivery Worker streams as the zip download. Only chunks the
+// game hasn't stored before are uploaded.
+export async function uploadBuild(plan, build, { log = console.error, pollIntervalMs } = {}) {
+  const source = await pathInfo(build.buildDirectory, { allowDirectory: true, label: "Build directory" });
+  if (!(await stat(build.buildDirectory)).isDirectory()) {
+    throw new Error(`Build directory must be a folder, not a file: ${build.buildDirectory}`);
   }
-
-  const file = await fileInfo(build.archivePath);
-  log(`Creating ${build.platform} build from ${build.archivePath}`);
-  const hashes = await hashFile(build.archivePath);
-
-  const createResponse = await postJson(gameApiUrl(plan, "/builds"), plan.token, {
-    platform: build.platform,
-    branch: build.branch,
-    version: build.version,
-    git_sha: build.gitSha,
-    archive_kind: build.archiveKind,
-    filename: build.filename,
-    byte_size: file.size,
-    checksum_md5: hashes.md5Base64,
-    checksum_sha256: hashes.sha256Hex,
-    launch_path: build.launchPath,
-    launch_args: build.launchArgs,
-    working_directory: build.workingDirectory,
-    source_ref: build.sourceRef
-  });
-
-  log(`Uploading ${build.filename} (${formatBytes(file.size)}) to build ${createResponse.id}`);
-  let multipartUpload = null;
-  if (createResponse.multipart_upload) {
-    multipartUpload = await uploadMultipartFile(
-      createResponse.multipart_upload,
-      build.archivePath,
-      file.size,
-      { log }
-    );
-  } else {
-    await uploadFile(createResponse.upload_url, createResponse.upload_headers ?? {}, build.archivePath, file.size, {
-      label: "Direct upload"
-    });
-  }
-
-  log(`Completing build ${createResponse.id}`);
-  const completeResponse = await postJson(
-    `${plan.apiUrl}/api/game_builds/${createResponse.id}/complete`,
-    plan.token,
-    {
-      signed_id: createResponse.signed_id,
-      multipart_upload: multipartUpload
-    }
-  );
-
-  return {
-    buildId: completeResponse.id ?? createResponse.id,
-    platform: build.platform,
-    version: build.version,
-    gitSha: build.gitSha,
-    filename: build.filename,
-    checksumSha256: hashes.sha256Hex,
-    sizeBytes: file.size,
-    status: completeResponse.status ?? "ready",
-    readyAt: completeResponse.ready_at
-  };
-}
-
-async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
-  const source = await pathInfo(build.archivePath, { allowDirectory: true, label: "Build source" });
-  log(`Creating ${build.platform} wharf patch from ${build.archivePath}`);
+  log(`Creating ${build.platform} wharf patch from ${build.buildDirectory}`);
 
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "testingfloor-wharf-"));
   try {
@@ -604,7 +557,7 @@ async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
     await runButlerDiff({
       butlerPath: plan.butlerPath ?? "butler",
       target: targetSignaturePath,
-      source: build.archivePath,
+      source: build.buildDirectory,
       patchPath
     });
 
@@ -619,6 +572,7 @@ async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
       version: build.version,
       git_sha: build.gitSha,
       archive_kind: "wharf",
+      zip_delivery: "chunk_manifest",
       filename: build.filename,
       byte_size: source.size,
       wharf_patch_from_build_id: base.buildId ?? undefined,
@@ -656,8 +610,11 @@ async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
       }
     );
 
+    const buildId = completeResponse.id ?? createResponse.id;
+    const manifest = await uploadChunkManifest(plan, buildId, build.buildDirectory, { log, pollIntervalMs });
+
     return {
-      buildId: completeResponse.id ?? createResponse.id,
+      buildId,
       platform: build.platform,
       version: build.version,
       gitSha: build.gitSha,
@@ -665,7 +622,8 @@ async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
       checksumSha256: completeResponse.checksum_sha256 ?? null,
       sizeBytes: source.size,
       status: completeResponse.status ?? "processing",
-      readyAt: completeResponse.ready_at
+      readyAt: completeResponse.ready_at,
+      zipSizeBytes: manifest.zip_size_bytes ?? null
     };
   } finally {
     await rm(tempDir, { force: true, recursive: true });
@@ -677,6 +635,7 @@ async function fetchWharfBase(plan, build) {
   if (build.branch) {
     query.set("branch", build.branch);
   }
+  query.set("zip_delivery", "chunk_manifest");
   const response = await getJson(
     gameApiUrl(plan, `/builds/wharf/base?${query.toString()}`),
     plan.token
@@ -685,6 +644,110 @@ async function fetchWharfBase(plan, build) {
     buildId: response.build_id ?? response.buildId ?? null,
     signatureUrl: response.signature_url ?? response.signatureUrl ?? null
   };
+}
+
+const CHUNK_ANNOUNCE_BATCH = 1000;
+const CHUNK_UPLOAD_CONCURRENCY = 8;
+const MANIFEST_VERIFY_TIMEOUT_MS = 45 * 60 * 1000;
+
+// Uploads the build folder as chunks plus a manifest, then waits until
+// Testing Floor has verified every chunk and file checksum. Only chunks the
+// game hasn't stored before are uploaded.
+async function uploadChunkManifest(plan, buildId, buildDirectory, { log, pollIntervalMs = 5000 }) {
+  log(`Splitting ${buildDirectory} into chunks for zip downloads`);
+  const { entries, objects } = await chunkBuildDirectory(buildDirectory);
+  const objectList = [...objects.entries()];
+  const totalBytes = objectList.reduce((sum, [, object]) => sum + object.size, 0);
+  log(`${entries.length} entries in ${objectList.length} chunks (${formatBytes(totalBytes)})`);
+
+  const missing = [];
+  for (let index = 0; index < objectList.length; index += CHUNK_ANNOUNCE_BATCH) {
+    const batch = objectList.slice(index, index + CHUNK_ANNOUNCE_BATCH);
+    const response = await postJson(`${plan.apiUrl}/api/game_builds/${buildId}/chunks`, plan.token, {
+      chunks: batch.map(([sha256, object]) => ({ sha256, byte_size: object.size }))
+    });
+    missing.push(...(response.missing ?? []));
+  }
+
+  const missingBytes = missing.reduce((sum, chunk) => sum + objects.get(chunk.sha256).size, 0);
+  log(`Uploading ${missing.length} new chunks (${formatBytes(missingBytes)}); the other ${objectList.length - missing.length} are already stored`);
+  await mapWithConcurrency(missing, CHUNK_UPLOAD_CONCURRENCY, (chunk) =>
+    withRetries(`Chunk ${chunk.sha256}`, async () => {
+      const object = objects.get(chunk.sha256);
+      await uploadBuffer(chunk.upload_url, chunk.upload_headers ?? {}, await readObject(object), { label: `Chunk ${chunk.sha256}` });
+    })
+  );
+
+  await postJson(`${plan.apiUrl}/api/game_builds/${buildId}/manifest`, plan.token, {
+    manifest: { modified_at: new Date().toISOString(), entries }
+  });
+
+  log("Waiting for Testing Floor to verify the chunks");
+  const deadline = Date.now() + MANIFEST_VERIFY_TIMEOUT_MS;
+  for (;;) {
+    const status = await getJson(`${plan.apiUrl}/api/game_builds/${buildId}/manifest`, plan.token);
+    if (status.status === "verified") {
+      log(`Zip download ready (${formatBytes(status.zip_size_bytes ?? 0)})`);
+      return status;
+    }
+    if (status.status === "failed") {
+      throw new Error(`Testing Floor rejected build ${buildId}'s chunks: ${status.error}`);
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`Timed out waiting for Testing Floor to verify build ${buildId}'s chunks`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+}
+
+async function mapWithConcurrency(items, limit, worker) {
+  let next = 0;
+  const run = async () => {
+    while (next < items.length) {
+      const item = items[next];
+      next += 1;
+      await worker(item);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
+}
+
+async function withRetries(label, attempt, { attempts = 3 } = {}) {
+  for (let tries = 1; ; tries += 1) {
+    try {
+      return await attempt();
+    } catch (error) {
+      if (tries >= attempts) {
+        throw new Error(`${label} failed after ${attempts} attempts: ${error.message}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500 * tries));
+    }
+  }
+}
+
+function uploadBuffer(uploadUrl, uploadHeaders, body, { label = "Upload" } = {}) {
+  const url = new URL(uploadUrl);
+  const client = url.protocol === "https:" ? https : http;
+  const headers = compactHeaders({ ...uploadHeaders, "Content-Length": String(body.length) });
+
+  return new Promise((resolve, reject) => {
+    const request = client.request(url, { method: "PUT", headers }, (response) => {
+      let text = "";
+      response.setEncoding("utf8");
+      response.on("data", (part) => {
+        text += part;
+      });
+      response.on("end", () => {
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          resolve();
+        } else {
+          reject(new Error(`${label} failed with ${response.statusCode}: ${text}`));
+        }
+      });
+    });
+    request.on("error", reject);
+    request.end(body);
+  });
 }
 
 async function downloadBaseSignature(signatureUrl, tempDir) {
@@ -747,8 +810,7 @@ async function readJson(filePath) {
 
 function buildFromOptions(options) {
   return {
-    archive: options.archive,
-    archiveKind: options.archiveKind,
+    buildDirectory: options.buildDirectory ?? options.archive,
     branch: options.branch,
     filename: options.filename,
     gitSha: options.gitSha,
@@ -762,14 +824,13 @@ function buildFromOptions(options) {
 }
 
 function normalizeBuild(build, { configDir, cwd, commonVersion, commonGitSha, commonSourceRef, commonBranch }) {
-  const archive = build.archive ?? build.path;
-  const archiveKind = build.archiveKind ?? build.archive_kind ?? "zip";
+  // archive and path are older names for the same folder.
+  const directory = build.buildDirectory ?? build.build_directory ?? build.archive ?? build.path;
 
   return {
-    archivePath: archive ? resolveBuildPath(archive, build.fromConfig === false ? cwd : configDir) : null,
-    archiveKind,
+    buildDirectory: directory ? resolveBuildPath(directory, build.fromConfig === false ? cwd : configDir) : null,
     branch: build.branch ?? commonBranch ?? undefined,
-    filename: build.filename ?? defaultBuildFilename(archive, archiveKind),
+    filename: build.filename ?? defaultBuildFilename(directory),
     gitSha: build.gitSha ?? build.git_sha ?? commonGitSha,
     launchArgs: normalizeLaunchArgs(build.launchArgs ?? build.launch_args),
     launchPath: build.launchPath ?? build.launch_path,
@@ -783,16 +844,13 @@ function normalizeBuild(build, { configDir, cwd, commonVersion, commonGitSha, co
   };
 }
 
-function defaultBuildFilename(archive, archiveKind) {
-  if (!archive) {
+function defaultBuildFilename(directory) {
+  if (!directory) {
     return null;
   }
 
-  const name = path.basename(archive);
-  if (archiveKind === "wharf" && !path.extname(name)) {
-    return `${name}.zip`;
-  }
-  return name;
+  const name = path.basename(directory);
+  return path.extname(name).toLowerCase() === ".zip" ? name : `${name}.zip`;
 }
 
 function normalizeLaunchArgs(value) {
@@ -823,7 +881,7 @@ function validatePlan(plan) {
   }
 
   if (plan.builds.length === 0) {
-    throw new Error("No builds configured. Pass --platform/--archive or provide config builds.");
+    throw new Error("No builds configured. Pass --platform/--build-directory or provide config builds.");
   }
 
   for (const build of plan.builds) {
@@ -831,12 +889,8 @@ function validatePlan(plan) {
       throw new Error(`Invalid platform "${build.platform}". Expected windows, macos, or linux.`);
     }
 
-    if (!["zip", "wharf"].includes(build.archiveKind)) {
-      throw new Error(`Unsupported archive kind "${build.archiveKind}". Expected zip or wharf.`);
-    }
-
-    if (!build.archivePath) {
-      throw new Error(`Missing archive path for ${build.platform}.`);
+    if (!build.buildDirectory) {
+      throw new Error(`Missing build directory for ${build.platform}.`);
     }
 
     if (!build.version) {
@@ -1148,7 +1202,7 @@ function helpText() {
   return `Testing Floor CLI
 
 Usage:
-  testingfloor upload-build --organization-id gamedepartment --game-id 42 --platform windows --archive ./game-windows.zip --version 0.4.12 --launch-path Game.exe
+  testingfloor upload-build --organization-id gamedepartment --game-id 42 --platform windows --build-directory ./Builds/Windows --version 0.4.12 --launch-path Game.exe
   testingfloor upload-build --config testingfloor-builds.json
   testingfloor upload-map --organization-id gamedepartment --game-id 42 --level-id factory --image ./maps/factory.png --bounds 0,0,200,200
   testingfloor upload-map --config testingfloor-maps.json
@@ -1161,18 +1215,18 @@ Environment:
   TESTING_FLOOR_VERSION         Build version / map app_version metadata
   TESTING_FLOOR_MAP_VERSION     Telemetry map version number
   TESTING_FLOOR_GIT_SHA         Git SHA metadata (builds)
-  TESTING_FLOOR_BUTLER_PATH     Path to butler for wharf uploads
+  TESTING_FLOOR_BUTLER_PATH     Path to butler (makes the recorder's patch)
 
 Build options:
   --platform <platform>     windows, macos, or linux
-  --archive <path>          Zip file, wharf-readable archive, or build directory
-  --archive-kind <kind>     zip or wharf, defaults to zip
-  --butler-path <path>      Path to butler for wharf uploads
+  --build-directory <path>  The ready-to-run build folder
+  --filename <name>         Name for the zip download, defaults to the folder name
+  --butler-path <path>      Path to butler (makes the recorder's patch)
   --version <version>       Version metadata
   --git-sha <sha>           Git SHA metadata
-  --launch-path <path>      Executable path inside the extracted archive
+  --launch-path <path>      Executable path inside the build folder
   --launch-arg <arg>        Launch argument, repeatable
-  --working-directory <dir> Working directory inside the extracted archive, defaults to "."
+  --working-directory <dir> Working directory inside the build folder, defaults to "."
   --source-ref <key=value>  Source metadata, repeatable
   --source-ref-json <json>  Source metadata object
 

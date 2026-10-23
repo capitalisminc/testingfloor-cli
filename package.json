@@ -10,12 +10,12 @@
     "build": "npm run build:action && npm run build:action-map",
     "build:action": "esbuild src/action.js --bundle --platform=node --format=cjs --target=node24 --outfile=dist/action.cjs",
     "build:action-map": "esbuild src/action-map-entry.js --bundle --platform=node --format=cjs --target=node24 --outfile=upload-map/dist/action-map.cjs",
-    "lint": "node --check bin/testingfloor.js && node --check src/action.js && node --check src/action-core.js && node --check src/action-io.js && node --check src/action-map.js && node --check src/action-map-entry.js && node --check src/cli.js && node --check test/cli.test.js && node --check dist/action.cjs && node --check upload-map/dist/action-map.cjs",
+    "lint": "node --check bin/testingfloor.js && node --check src/action.js && node --check src/action-core.js && node --check src/action-io.js && node --check src/action-map.js && node --check src/action-map-entry.js && node --check src/cli.js && node --check src/chunks.js && node --check test/chunks.test.js && node --check test/cli.test.js && node --check dist/action.cjs && node --check upload-map/dist/action-map.cjs",
     "prepack": "npm run build",
     "test": "node --test"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.15"
   },
   "files": [
     "action.yml",
@@ -35,8 +35,7 @@
   "license": "MIT",
   "dependencies": {
     "@actions/core": "^3.0.1",
-    "@actions/tool-cache": "^4.0.0",
-    "zip-stream": "^7.0.2"
+    "@actions/tool-cache": "^4.0.0"
   },
   "devDependencies": {
     "esbuild": "^0.28.0"

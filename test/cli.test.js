@@ -1,17 +1,18 @@
 import assert from "node:assert/strict";
+import { createHash, randomBytes } from "node:crypto";
 import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { crc32 } from "node:zlib";
 
 import {
   butlerDownloadUrl,
   parseJsonInput,
   readInputs,
   resolveActionBuild,
-  resolveActionButlerPath,
-  zipBuildDirectory
+  resolveActionButlerPath
 } from "../src/action-core.js";
 import {
   normalizeConfiguredBuilds,
@@ -54,29 +55,21 @@ test("parseArgs parses single build flags", () => {
   assert.deepEqual(parsed.options.sourceRef, ["run_id=123"]);
 });
 
-test("parseArgs parses wharf build flags", () => {
+test("parseArgs parses the build directory and butler flags", () => {
   const parsed = parseArgs([
     "upload-build",
-    "--organization-id",
-    "gamedepartment",
-    "--game-id",
-    "42",
-    "--platform",
-    "windows",
-    "--archive",
+    "--build-directory",
     "build/windows",
-    "--archive-kind",
-    "wharf",
     "--butler-path",
-    "/usr/local/bin/butler",
-    "--version",
-    "0.4.12",
-    "--launch-path",
-    "Game.exe"
+    "/usr/local/bin/butler"
   ]);
 
-  assert.equal(parsed.options.archiveKind, "wharf");
+  assert.equal(parsed.options.buildDirectory, "build/windows");
   assert.equal(parsed.options.butlerPath, "/usr/local/bin/butler");
+});
+
+test("parseArgs explains that --archive-kind was removed", () => {
+  assert.throws(() => parseArgs(["upload-build", "--archive-kind", "zip"]), /--archive-kind was removed/);
 });
 
 test("normalizeConfiguredBuilds supports platforms object", () => {
@@ -122,7 +115,7 @@ test("resolveUploadPlan builds single upload from flags and env", async () => {
   assert.equal(plan.gameId, "42");
   assert.equal(plan.token, "tf_test");
   assert.equal(plan.builds.length, 1);
-  assert.equal(plan.builds[0].archivePath, path.join(cwd, "game.zip"));
+  assert.equal(plan.builds[0].buildDirectory, path.join(cwd, "game.zip"));
   assert.equal(plan.builds[0].gitSha, "abc123");
   assert.deepEqual(plan.builds[0].launchArgs, ["--safe"]);
   assert.deepEqual(plan.builds[0].sourceRef, { run_id: "123" });
@@ -196,7 +189,7 @@ test("resolveUploadPlan leaves branch undefined when no source provides one", as
   assert.equal(plan.builds[0].branch, undefined);
 });
 
-test("resolveUploadPlan accepts wharf builds from directories", async () => {
+test("resolveUploadPlan accepts build directories", async () => {
   const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
   const buildDir = path.join(cwd, "windows-build");
   await mkdir(buildDir);
@@ -204,8 +197,7 @@ test("resolveUploadPlan accepts wharf builds from directories", async () => {
 
   const plan = await resolveUploadPlan(
     {
-      archive: "windows-build",
-      archiveKind: "wharf",
+      buildDirectory: "windows-build",
       gameId: "42",
       launchPath: "Game.exe",
       platform: "windows",
@@ -219,8 +211,7 @@ test("resolveUploadPlan accepts wharf builds from directories", async () => {
     cwd
   );
 
-  assert.equal(plan.builds[0].archiveKind, "wharf");
-  assert.equal(plan.builds[0].archivePath, buildDir);
+  assert.equal(plan.builds[0].buildDirectory, buildDir);
   assert.equal(plan.builds[0].filename, "windows-build.zip");
   assert.equal(plan.butlerPath, "/usr/local/bin/butler");
 });
@@ -252,7 +243,7 @@ test("resolveUploadPlan supports config builds relative to config file", async (
     cwd
   );
 
-  assert.equal(plan.builds[0].archivePath, path.join(cwd, "game-windows.zip"));
+  assert.equal(plan.builds[0].buildDirectory, path.join(cwd, "game-windows.zip"));
   assert.equal(plan.organizationId, "gamedepartment");
 });
 
@@ -362,7 +353,6 @@ test("readInputs accepts GitHub's hyphenated action input environment names", ()
   });
 
   assert.equal(inputs.apiToken, "tf_builds");
-  assert.equal(inputs.archiveKind, "wharf");
   assert.equal(inputs.butlerPath, "/opt/butler");
   assert.equal(inputs.butlerVersion, "15.26.1");
   assert.equal(inputs.gameId, "42");
@@ -373,11 +363,16 @@ test("readInputs accepts GitHub's hyphenated action input environment names", ()
   assert.deepEqual(inputs.sourceRef, { run_id: "123" });
 });
 
+test("readInputs explains that the archive input was removed", () => {
+  assert.throws(
+    () => readInputs({ "INPUT_API-TOKEN": "tf", "INPUT_ARCHIVE": "game.zip" }),
+    /archive input was removed/
+  );
+});
+
 test("resolveActionButlerPath keeps butler setup inside the action", async () => {
-  assert.equal(await resolveActionButlerPath({ archiveKind: "zip", butlerPath: null }), null);
   assert.equal(
     await resolveActionButlerPath({
-      archiveKind: "wharf",
       butlerPath: "/opt/butler",
       env: { GITHUB_ACTIONS: "true" },
       setup: async () => {
@@ -388,7 +383,6 @@ test("resolveActionButlerPath keeps butler setup inside the action", async () =>
   );
   assert.equal(
     await resolveActionButlerPath({
-      archiveKind: "wharf",
       env: { GITHUB_ACTIONS: "true", TESTING_FLOOR_BUTLER_PATH: "/env/butler" },
       setup: async () => {
         throw new Error("setup should not run");
@@ -398,7 +392,6 @@ test("resolveActionButlerPath keeps butler setup inside the action", async () =>
   );
   assert.equal(
     await resolveActionButlerPath({
-      archiveKind: "wharf",
       env: {},
       setup: async () => {
         throw new Error("setup should not run outside GitHub Actions");
@@ -409,7 +402,6 @@ test("resolveActionButlerPath keeps butler setup inside the action", async () =>
 
   let setupCalled = false;
   const managedPath = await resolveActionButlerPath({
-    archiveKind: "wharf",
     butlerVersion: "15.26.1",
     env: { GITHUB_ACTIONS: "true" },
     setup: async ({ version }) => {
@@ -438,202 +430,63 @@ test("butlerDownloadUrl maps runner platforms to itch broth downloads", () => {
   );
 });
 
-test("zipBuildDirectory creates a ZIP64 archive from a build directory", async () => {
-  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
-  const buildDirectory = path.join(cwd, "build");
-  const runnerTemp = path.join(cwd, "tmp");
-  const archivePath = path.join(runnerTemp, "game.zip");
-  await mkdir(path.join(buildDirectory, "Data"), { recursive: true });
-  await writeFile(path.join(buildDirectory, "Game.exe"), "binary");
-  await writeFile(path.join(buildDirectory, "Data", "config.json"), "{\"quality\":\"test\"}");
-
-  const result = await zipBuildDirectory({
-    archiveName: "game.zip",
-    buildDirectory,
-    runnerTemp
-  });
-  const archive = await readFile(archivePath);
-
-  assert.equal(result, archivePath);
-  assert.equal(archive.subarray(0, 4).toString("hex"), "504b0304");
-  assert.notEqual(archive.indexOf(Buffer.from("Game.exe")), -1);
-  assert.notEqual(archive.indexOf(Buffer.from("Data/config.json")), -1);
-  assert.notEqual(archive.indexOf(Buffer.from([0x50, 0x4b, 0x06, 0x06])), -1);
-  assert.notEqual(archive.indexOf(Buffer.from([0x50, 0x4b, 0x06, 0x07])), -1);
-});
-
-test("uploadBuild uploads multipart parts and completes with ETags", async (t) => {
-  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
-  const archivePath = path.join(cwd, "game.zip");
-  await writeFile(archivePath, "abcdefghij");
-
-  const uploads = [];
-  let completePayload = null;
+function chunkDeliveryServer({ manifestStatuses, alreadyStored = 1, patchUpload = null }) {
+  const state = { announced: [], uploads: {}, parts: [], manifest: null, createPayload: null, completePayload: null, wharfBaseUrl: null, polls: 0 };
   const server = http.createServer(async (request, response) => {
     try {
+      if (request.method === "GET" && request.url.startsWith("/api/organizations/gamedepartment/games/42/builds/wharf/base")) {
+        state.wharfBaseUrl = request.url;
+        writeJson(response, 200, { build_id: null, signature_url: null });
+        return;
+      }
       if (request.method === "POST" && request.url === "/api/organizations/gamedepartment/games/42/builds") {
-        const body = JSON.parse(await readRequestBody(request));
-        assert.equal(body.byte_size, 10);
-        assert.equal(body.filename, "game.zip");
-        writeJson(response, 201, {
-          id: 7,
-          signed_id: "signed-blob",
-          upload_strategy: "multipart",
-          multipart_upload: {
-            upload_id: "upload-123",
-            part_size: 4,
-            parts: [
-              { part_number: 1, upload_url: `${serverUrl(server)}/parts/1`, upload_headers: { "x-part": "1" } },
-              { part_number: 2, upload_url: `${serverUrl(server)}/parts/2`, upload_headers: { "x-part": "2" } },
-              { part_number: 3, upload_url: `${serverUrl(server)}/parts/3`, upload_headers: { "x-part": "3" } }
-            ]
-          }
-        });
+        state.createPayload = JSON.parse(await readRequestBody(request));
+        const upload = (name) => ({ signed_id: `${name}-signed`, upload_strategy: "direct", upload_url: `${serverUrl(server)}/uploads/${name}`, upload_headers: {} });
+        writeJson(response, 201, { id: 8, archive_kind: "wharf", uploads: { patch: patchUpload?.(serverUrl(server)) ?? upload("patch"), signature: upload("signature") } });
         return;
       }
-
-      if (request.method === "PUT" && request.url?.startsWith("/parts/")) {
-        const partNumber = Number(request.url.split("/").pop());
-        uploads.push({
-          body: await readRequestBody(request),
-          contentLength: request.headers["content-length"],
-          partNumber,
-          xPart: request.headers["x-part"]
-        });
-        response.writeHead(200, { ETag: `"etag-${partNumber}"` });
-        response.end();
-        return;
-      }
-
-      if (request.method === "POST" && request.url === "/api/game_builds/7/complete") {
-        completePayload = JSON.parse(await readRequestBody(request));
-        writeJson(response, 200, {
-          id: 7,
-          status: "ready",
-          ready_at: "2026-04-22T12:00:00Z"
-        });
-        return;
-      }
-
-      response.writeHead(404);
-      response.end();
-    } catch (error) {
-      response.writeHead(500);
-      response.end(error.stack);
-    }
-  });
-  await listen(server);
-  t.after(() => server.close());
-
-  const result = await uploadBuild(
-    { apiUrl: serverUrl(server), organizationId: "gamedepartment", gameId: "42", token: "tf_test" },
-    {
-      archiveKind: "zip",
-      archivePath,
-      filename: "game.zip",
-      gitSha: "abc123",
-      launchArgs: [],
-      launchPath: "Game.exe",
-      platform: "windows",
-      sourceRef: {},
-      version: "0.4.12",
-      workingDirectory: "."
-    },
-    { log: () => {} }
-  );
-
-  assert.equal(result.buildId, 7);
-  assert.deepEqual(
-    uploads.map((upload) => [upload.partNumber, upload.body, upload.contentLength, upload.xPart]),
-    [
-      [1, "abcd", "4", "1"],
-      [2, "efgh", "4", "2"],
-      [3, "ij", "2", "3"]
-    ]
-  );
-  assert.deepEqual(completePayload.multipart_upload, {
-    upload_id: "upload-123",
-    parts: [
-      { part_number: 1, etag: "\"etag-1\"" },
-      { part_number: 2, etag: "\"etag-2\"" },
-      { part_number: 3, etag: "\"etag-3\"" }
-    ]
-  });
-  assert.equal(completePayload.signed_id, "signed-blob");
-});
-
-test("uploadBuild creates and uploads wharf patch artifacts", async (t) => {
-  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
-  const buildDir = path.join(cwd, "game");
-  await mkdir(buildDir);
-  await writeFile(path.join(buildDir, "Game.exe"), "binary");
-  const butlerPath = await writeFakeButler(cwd);
-
-  const uploads = {};
-  const uploadOrder = [];
-  let createPayload = null;
-  let completePayload = null;
-  const server = http.createServer(async (request, response) => {
-    try {
-      if (
-        request.method === "GET" &&
-        request.url === "/api/organizations/gamedepartment/games/42/builds/wharf/base?platform=windows"
-      ) {
-        writeJson(response, 200, {
-          build_id: 6,
-          signature_url: `${serverUrl(server)}/base.sig`
-        });
-        return;
-      }
-
-      if (request.method === "GET" && request.url === "/base.sig") {
-        response.writeHead(200, { "Content-Type": "application/octet-stream" });
-        response.end("base signature");
-        return;
-      }
-
-      if (request.method === "POST" && request.url === "/api/organizations/gamedepartment/games/42/builds") {
-        createPayload = JSON.parse(await readRequestBody(request));
-        writeJson(response, 201, {
-          id: 8,
-          archive_kind: "wharf",
-          wharf_patch_from_build_id: 6,
-          uploads: {
-            patch: {
-              signed_id: "patch-signed",
-              upload_strategy: "direct",
-              upload_url: `${serverUrl(server)}/uploads/patch`,
-              upload_headers: { "x-upload": "patch" }
-            },
-            signature: {
-              signed_id: "signature-signed",
-              upload_strategy: "direct",
-              upload_url: `${serverUrl(server)}/uploads/signature`,
-              upload_headers: { "x-upload": "signature" }
-            }
-          }
-        });
-        return;
-      }
-
-      if (request.method === "PUT" && request.url?.startsWith("/uploads/")) {
-        uploadOrder.push(request.url);
-        uploads[request.url] = {
-          body: await readRequestBody(request),
-          contentLength: request.headers["content-length"],
-          uploadHeader: request.headers["x-upload"]
-        };
+      if (request.method === "PUT" && request.url.startsWith("/uploads/")) {
+        await readRequestBody(request);
         response.writeHead(200);
         response.end();
         return;
       }
-
-      if (request.method === "POST" && request.url === "/api/game_builds/8/complete") {
-        completePayload = JSON.parse(await readRequestBody(request));
-        writeJson(response, 200, { id: 8, status: "processing" });
+      if (request.method === "PUT" && request.url.startsWith("/parts/")) {
+        const partNumber = Number(request.url.split("/").pop());
+        state.parts.push([partNumber, await readRequestBody(request), request.headers["content-length"]]);
+        response.writeHead(200, { ETag: `"etag-${partNumber}"` });
+        response.end();
         return;
       }
-
+      if (request.method === "POST" && request.url === "/api/game_builds/8/complete") {
+        state.completePayload = JSON.parse(await readRequestBody(request));
+        writeJson(response, 200, { id: 8, status: "ready" });
+        return;
+      }
+      if (request.method === "POST" && request.url === "/api/game_builds/8/chunks") {
+        const { chunks } = JSON.parse(await readRequestBody(request));
+        state.announced.push(...chunks);
+        const missing = chunks.slice(alreadyStored).map((chunk) => ({ sha256: chunk.sha256, upload_url: `${serverUrl(server)}/chunk-uploads/${chunk.sha256}` }));
+        writeJson(response, 200, { missing });
+        return;
+      }
+      if (request.method === "PUT" && request.url.startsWith("/chunk-uploads/")) {
+        state.uploads[request.url.split("/").pop()] = Buffer.from(await readRequestBody(request, { binary: true }));
+        response.writeHead(200);
+        response.end();
+        return;
+      }
+      if (request.method === "POST" && request.url === "/api/game_builds/8/manifest") {
+        state.manifest = JSON.parse(await readRequestBody(request)).manifest;
+        writeJson(response, 202, { status: "pending" });
+        return;
+      }
+      if (request.method === "GET" && request.url === "/api/game_builds/8/manifest") {
+        const status = manifestStatuses[Math.min(state.polls, manifestStatuses.length - 1)];
+        state.polls += 1;
+        writeJson(response, 200, status);
+        return;
+      }
       response.writeHead(404);
       response.end();
     } catch (error) {
@@ -641,46 +494,109 @@ test("uploadBuild creates and uploads wharf patch artifacts", async (t) => {
       response.end(error.stack);
     }
   });
-  await listen(server);
-  t.after(() => server.close());
+  return { server, state };
+}
 
-  const result = await uploadBuild(
+async function chunkDeliveryUpload(server, cwd, buildDir) {
+  return uploadBuild(
+    { apiUrl: serverUrl(server), butlerPath: await writeFakeButler(cwd), organizationId: "gamedepartment", gameId: "42", token: "tf_test" },
     {
-      apiUrl: serverUrl(server),
-      butlerPath,
-      organizationId: "gamedepartment",
-      gameId: "42",
-      token: "tf_test"
-    },
-    {
-      archiveKind: "wharf",
-      archivePath: buildDir,
+      buildDirectory: buildDir,
       filename: "game.zip",
-      gitSha: "abc123",
       launchArgs: [],
       launchPath: "Game.exe",
       platform: "windows",
       sourceRef: {},
-      version: "0.4.12",
+      version: "0.5.0",
       workingDirectory: "."
     },
-    { log: () => {} }
+    { log: () => {}, pollIntervalMs: 1 }
   );
+}
+
+test("uploadBuild sends the wharf patch, then only new chunks and the manifest", async (t) => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  const buildDir = path.join(cwd, "game");
+  await mkdir(path.join(buildDir, "Data"), { recursive: true });
+  await writeFile(path.join(buildDir, "Game.exe"), randomBytes(3 << 20));
+  await writeFile(path.join(buildDir, "Data", "settings.ini"), "[game]\nfullscreen=1\n");
+  const { server, state } = chunkDeliveryServer({
+    manifestStatuses: [{ status: "pending" }, { status: "verified", zip_size_bytes: 3_145_900 }]
+  });
+  await listen(server);
+  t.after(() => server.close());
+
+  const result = await chunkDeliveryUpload(server, cwd, buildDir);
 
   assert.equal(result.buildId, 8);
-  assert.equal(result.status, "processing");
-  assert.equal(createPayload.archive_kind, "wharf");
-  assert.equal(createPayload.wharf_patch_from_build_id, 6);
-  assert.equal(createPayload.patch_byte_size, "patch bytes".length);
-  assert.equal(createPayload.signature_byte_size, "signature bytes".length);
-  assert.deepEqual(uploadOrder, ["/uploads/signature", "/uploads/patch"]);
-  assert.equal(uploads["/uploads/patch"].body, "patch bytes");
-  assert.equal(uploads["/uploads/patch"].uploadHeader, "patch");
-  assert.equal(uploads["/uploads/signature"].body, "signature bytes");
-  assert.deepEqual(completePayload, {
-    patch_signed_id: "patch-signed",
-    signature_signed_id: "signature-signed"
+  assert.equal(result.zipSizeBytes, 3_145_900);
+  assert.equal(state.createPayload.zip_delivery, "chunk_manifest");
+  assert.match(state.wharfBaseUrl, /zip_delivery=chunk_manifest/);
+  assert.ok(state.announced.length >= 2, "the big file and the packed small file");
+  assert.deepEqual(Object.keys(state.uploads).sort(), state.announced.slice(1).map((chunk) => chunk.sha256).sort(), "only missing chunks are uploaded");
+  for (const [sha256, body] of Object.entries(state.uploads)) {
+    assert.equal(createHash("sha256").update(body).digest("hex"), sha256);
+  }
+  const settings = state.manifest.entries.find((entry) => entry.path === "Data/settings.ini");
+  assert.equal(settings.crc32, crc32(Buffer.from("[game]\nfullscreen=1\n")));
+  assert.equal(state.manifest.entries.find((entry) => entry.path === "Data").type, "directory");
+  assert.equal(state.polls, 2);
+  assert.deepEqual(state.completePayload, { patch_signed_id: "patch-signed", signature_signed_id: "signature-signed" });
+});
+
+test("uploadBuild uploads a large wharf patch in parts and completes with their ETags", async (t) => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  const buildDir = path.join(cwd, "game");
+  await mkdir(buildDir);
+  await writeFile(path.join(buildDir, "Game.exe"), "binary");
+  const { server, state } = chunkDeliveryServer({
+    manifestStatuses: [{ status: "verified", zip_size_bytes: 128 }],
+    patchUpload: (baseUrl) => ({
+      signed_id: "patch-signed",
+      upload_strategy: "multipart",
+      multipart_upload: {
+        upload_id: "upload-123",
+        part_size: 4,
+        parts: [1, 2, 3].map((part_number) => ({ part_number, upload_url: `${baseUrl}/parts/${part_number}`, upload_headers: {} }))
+      }
+    })
   });
+  await listen(server);
+  t.after(() => server.close());
+
+  await chunkDeliveryUpload(server, cwd, buildDir);
+
+  assert.deepEqual(state.parts, [[1, "patc", "4"], [2, "h by", "4"], [3, "tes", "3"]]);
+  assert.deepEqual(state.completePayload.patch_multipart_upload, {
+    upload_id: "upload-123",
+    parts: [1, 2, 3].map((part_number) => ({ part_number, etag: `"etag-${part_number}"` }))
+  });
+});
+
+test("uploadBuild fails when Testing Floor rejects the chunks", async (t) => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  const buildDir = path.join(cwd, "game");
+  await mkdir(buildDir);
+  await writeFile(path.join(buildDir, "Game.exe"), "binary");
+  const { server } = chunkDeliveryServer({
+    manifestStatuses: [{ status: "failed", error: "Chunk abc doesn't match its SHA-256" }],
+    alreadyStored: 0
+  });
+  await listen(server);
+  t.after(() => server.close());
+
+  await assert.rejects(chunkDeliveryUpload(server, cwd, buildDir), /rejected build 8's chunks: Chunk abc doesn't match its SHA-256/);
+});
+
+test("uploadBuild refuses a zip file where a build folder is expected", async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  const zip = path.join(cwd, "game.zip");
+  await writeFile(zip, "zip bytes");
+
+  await assert.rejects(
+    uploadBuild({ apiUrl: "http://127.0.0.1:1", organizationId: "org", gameId: "42", token: "tf" }, { buildDirectory: zip, platform: "windows" }, { log: () => {} }),
+    /must be a folder/
+  );
 });
 
 test("parseJsonInput validates action JSON inputs", () => {
@@ -1076,12 +992,15 @@ function serverUrl(server) {
   return `http://${address.address}:${address.port}`;
 }
 
-function readRequestBody(request) {
+function readRequestBody(request, { binary = false } = {}) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     request.on("data", (chunk) => chunks.push(chunk));
     request.on("error", reject);
-    request.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    request.on("end", () => {
+      const body = Buffer.concat(chunks);
+      resolve(binary ? body : body.toString("utf8"));
+    });
   });
 }
 
