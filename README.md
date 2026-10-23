@@ -2,7 +2,7 @@
 
 Small Node CLI for uploading game artifacts to Testing Floor.
 
-It currently handles two artifact types: **builds** (ready-to-run game uploads, either zip or wharf delta) and **maps** (top-down level images plus their world-space bounds, used to render heatmaps and event overlays).
+It currently handles two artifact types: **builds** (ready-to-run game folders) and **maps** (top-down level images plus their world-space bounds, used to render heatmaps and event overlays).
 
 ## Install
 
@@ -28,7 +28,8 @@ testingfloor upload-build \
   --organization-id gamedepartment \
   --game-id 42 \
   --platform windows \
-  --archive ./Builds/game-windows.zip \
+  --build-directory ./Builds/Windows \
+  --filename game-windows.zip \
   --version 0.4.12 \
   --git-sha "$(git rev-parse HEAD)" \
   --launch-path Game.exe
@@ -36,34 +37,16 @@ testingfloor upload-build \
 
 The API token must belong to a user, include the `builds:create` scope, and the user must be able to manage games for the target game's organization.
 
-## Delta Builds
+## How builds are uploaded
 
-Use `archiveKind: "wharf"` or `--archive-kind wharf` to upload a wharf patch and signature instead of a full zip. The CLI asks Testing Floor for the latest base signature for the platform, runs `butler diff`, uploads `patch.pwr` plus `patch.pwr.sig`, and Testing Floor materializes the full fallback archive server-side.
+You point the CLI at the ready-to-run build folder; there's nothing else to choose. Each upload:
 
-```sh
-testingfloor upload-build \
-  --organization-id gamedepartment \
-  --game-id 42 \
-  --platform windows \
-  --archive ./Builds/Windows \
-  --archive-kind wharf \
-  --butler-path butler \
-  --filename game-windows.zip \
-  --version 0.4.12 \
-  --launch-path Game.exe
-```
+1. Diffs the folder against the platform's previous build with `butler` and uploads the wharf patch. The desktop recorder updates testers' installs from it. The GitHub Action installs butler for you; when running the CLI directly, put `butler` on `PATH` or pass `--butler-path`.
+2. Splits the folder into content-addressed chunks of about 3 MiB. Boundaries follow the content, so an edit inside a large file only changes the chunks around it. Files under 256 KiB are packed together.
+3. Asks Testing Floor which chunks the game hasn't stored yet, and uploads only those.
+4. Sends the manifest (every folder, file and symlink with its permissions and checksum) and waits until Testing Floor has verified the chunks. Testing Floor then streams the zip download (named by `--filename`) straight from them.
 
-If no previous signature exists, the CLI uses butler's empty-container target for the first upload. `--archive` may point at a build directory or an archive that butler can read.
-
-### Zip downloads from chunks
-
-Add `--zip-delivery chunk-manifest` (config `zipDelivery: "chunk-manifest"`) to a wharf upload of a build directory, and Testing Floor no longer builds a zip from the patch on its servers. Instead, after uploading the patch, the CLI:
-
-1. Splits the build folder into content-addressed chunks of about 3 MiB. Boundaries follow the content, so an edit inside a large file only changes the chunks around it. Files under 256 KiB are packed together.
-2. Asks Testing Floor which chunks the game hasn't stored yet, and uploads only those.
-3. Sends the manifest, the list of files with their permissions, symlinks and checksums, and waits until Testing Floor has verified every chunk.
-
-Testing Floor's build-delivery Worker then streams the zip download straight from those chunks. The recorder still installs from the wharf patch. The first chunked upload sends the whole build, uncompressed; later builds send only what changed.
+The first upload sends the whole build, uncompressed; later builds send only what changed.
 
 ## Multiple Platforms
 
@@ -78,17 +61,20 @@ Create `testingfloor-builds.json`:
   "builds": [
     {
       "platform": "windows",
-      "archive": "./Builds/game-windows.zip",
+      "buildDirectory": "./Builds/Windows",
+      "filename": "game-windows.zip",
       "launchPath": "Game.exe"
     },
     {
       "platform": "macos",
-      "archive": "./Builds/game-macos.zip",
+      "buildDirectory": "./Builds/macOS",
+      "filename": "game-macos.zip",
       "launchPath": "Game.app"
     },
     {
       "platform": "linux",
-      "archive": "./Builds/game-linux.zip",
+      "buildDirectory": "./Builds/Linux",
+      "filename": "game-linux.zip",
       "launchPath": "Game.x86_64"
     }
   ]
@@ -101,7 +87,7 @@ Then run:
 testingfloor upload-build --config testingfloor-builds.json
 ```
 
-Archive paths in a config file are resolved relative to that config file.
+Build directories in a config file are resolved relative to that config file.
 
 ## GitHub Actions
 
@@ -127,11 +113,9 @@ Use this repository directly as a GitHub Action:
       }
 ```
 
-The action accepts either `archive` or `build-directory`. When `build-directory` is supplied, the action creates a ZIP64 archive in Node before upload, without relying on runner-provided zip, tar, or PowerShell tooling.
+`build-directory` is the ready-to-run build folder; see [How builds are uploaded](#how-builds-are-uploaded). Butler is installed automatically. Use `butler-path` or `butler-version` only when you need to override that.
 
-For delta uploads, set `archive-kind: wharf`. The action passes `build-directory` directly to butler instead of zipping it first.
-Add `zip-delivery: chunk-manifest` to also upload the folder as chunks for zip downloads (see [Zip downloads from chunks](#zip-downloads-from-chunks)).
-In GitHub Actions, butler is installed automatically for wharf uploads. Use `butler-path` or `butler-version` only when you need to override that default.
+The old `archive` and `archive-kind` inputs are no longer used. `archive-kind` only produces a warning and can be deleted; `archive` (a zip file) fails, because only a folder can be uploaded as chunks.
 
 You can also run the CLI directly:
 
@@ -256,14 +240,12 @@ Top-level:
 Build object:
 
 - `platform`: `windows`, `macos`, or `linux`.
-- `archive`: zip file to upload.
-- `launchPath`: executable path inside the extracted archive.
+- `buildDirectory`: the ready-to-run build folder (`archive` and `path` are accepted as older names).
+- `launchPath`: executable path inside the build folder.
 - `launchArgs`: optional array, defaults to `[]`.
-- `workingDirectory`: optional extracted-archive working directory, defaults to `"."`.
-- `filename`: optional server-visible archive filename.
-- `archiveKind`: `zip` or `wharf`. `wharf` requires butler when running the CLI directly.
-- `zipDelivery`: optional `chunk-manifest`. Needs `archiveKind: "wharf"` and a build directory; see [Zip downloads from chunks](#zip-downloads-from-chunks).
-- `butlerPath`: optional path to the butler executable. The GitHub Action installs butler automatically for wharf uploads.
+- `workingDirectory`: optional working directory inside the build folder, defaults to `"."`.
+- `filename`: optional name for the zip download. Defaults to the folder name plus `.zip`.
+- `butlerPath`: optional path to the butler executable. The GitHub Action installs butler automatically.
 
 Map config top-level:
 
