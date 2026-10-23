@@ -55,6 +55,16 @@ testingfloor upload-build \
 
 If no previous signature exists, the CLI uses butler's empty-container target for the first upload. `--archive` may point at a build directory or an archive that butler can read.
 
+### Zip downloads from chunks
+
+Add `--zip-delivery chunk-manifest` (config `zipDelivery: "chunk-manifest"`) to a wharf upload of a build directory, and Testing Floor no longer builds a zip from the patch on its servers. Instead, after uploading the patch, the CLI:
+
+1. Splits the build folder into content-addressed chunks of about 3 MiB. Boundaries follow the content, so an edit inside a large file only changes the chunks around it. Files under 256 KiB are packed together.
+2. Asks Testing Floor which chunks the game hasn't stored yet, and uploads only those.
+3. Sends the manifest, the list of files with their permissions, symlinks and checksums, and waits until Testing Floor has verified every chunk.
+
+Testing Floor's build-delivery Worker then streams the zip download straight from those chunks. The recorder still installs from the wharf patch. The first chunked upload sends the whole build, uncompressed; later builds send only what changed.
+
 ## Multiple Platforms
 
 Create `testingfloor-builds.json`:
@@ -120,6 +130,7 @@ Use this repository directly as a GitHub Action:
 The action accepts either `archive` or `build-directory`. When `build-directory` is supplied, the action creates a ZIP64 archive in Node before upload, without relying on runner-provided zip, tar, or PowerShell tooling.
 
 For delta uploads, set `archive-kind: wharf`. The action passes `build-directory` directly to butler instead of zipping it first.
+Add `zip-delivery: chunk-manifest` to also upload the folder as chunks for zip downloads (see [Zip downloads from chunks](#zip-downloads-from-chunks)).
 In GitHub Actions, butler is installed automatically for wharf uploads. Use `butler-path` or `butler-version` only when you need to override that default.
 
 You can also run the CLI directly:
@@ -251,6 +262,7 @@ Build object:
 - `workingDirectory`: optional extracted-archive working directory, defaults to `"."`.
 - `filename`: optional server-visible archive filename.
 - `archiveKind`: `zip` or `wharf`. `wharf` requires butler when running the CLI directly.
+- `zipDelivery`: optional `chunk-manifest`. Needs `archiveKind: "wharf"` and a build directory; see [Zip downloads from chunks](#zip-downloads-from-chunks).
 - `butlerPath`: optional path to the butler executable. The GitHub Action installs butler automatically for wharf uploads.
 
 Map config top-level:

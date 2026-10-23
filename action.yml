@@ -39,6 +39,9 @@ inputs:
   build-directory:
     description: Directory to upload. For zip uploads it is zipped first; for wharf uploads it is diffed directly.
     required: false
+  zip-delivery:
+    description: "How the build's zip download is produced. Set chunk-manifest (wharf only, needs build-directory) to also upload the folder as deduplicated chunks that Testing Floor streams as the zip, instead of building a zip on the server."
+    required: false
   filename:
     description: Filename to store for the uploaded archive.
     required: false

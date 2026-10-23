@@ -8,6 +8,8 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
+import { chunkBuildDirectory, readObject } from "./chunks.js";
+
 const DEFAULT_API_URL = "https://api.testingfloor.com";
 const PLATFORMS = new Set(["windows", "macos", "linux"]);
 const AXES = new Set(["x", "y", "z"]);
@@ -44,7 +46,8 @@ const VALUE_OPTIONS = new Set([
   "variant-key",
   "version",
   "vertical-axis",
-  "working-directory"
+  "working-directory",
+  "zip-delivery"
 ]);
 
 export async function main(argv = process.argv.slice(2), env = process.env, cwd = process.cwd()) {
@@ -525,7 +528,7 @@ export function parseSourceRefEntries(entries) {
   }, {});
 }
 
-export async function uploadBuild(plan, build, { log = console.error } = {}) {
+export async function uploadBuild(plan, build, { log = console.error, pollIntervalMs } = {}) {
   if (build.archiveKind === "wharf") {
     return uploadWharfBuild(plan, build, { log });
   }
@@ -588,8 +591,11 @@ export async function uploadBuild(plan, build, { log = console.error } = {}) {
   };
 }
 
-async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
+async function uploadWharfBuild(plan, build, { log = console.error, pollIntervalMs } = {}) {
   const source = await pathInfo(build.archivePath, { allowDirectory: true, label: "Build source" });
+  if (build.zipDelivery && !(await stat(build.archivePath)).isDirectory()) {
+    throw new Error(`zip-delivery chunk-manifest needs a build directory, not an archive: ${build.archivePath}`);
+  }
   log(`Creating ${build.platform} wharf patch from ${build.archivePath}`);
 
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "testingfloor-wharf-"));
@@ -619,6 +625,7 @@ async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
       version: build.version,
       git_sha: build.gitSha,
       archive_kind: "wharf",
+      zip_delivery: build.zipDelivery,
       filename: build.filename,
       byte_size: source.size,
       wharf_patch_from_build_id: base.buildId ?? undefined,
@@ -656,8 +663,13 @@ async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
       }
     );
 
+    const buildId = completeResponse.id ?? createResponse.id;
+    const manifest = build.zipDelivery
+      ? await uploadChunkManifest(plan, buildId, build.archivePath, { log, pollIntervalMs })
+      : null;
+
     return {
-      buildId: completeResponse.id ?? createResponse.id,
+      buildId,
       platform: build.platform,
       version: build.version,
       gitSha: build.gitSha,
@@ -665,7 +677,8 @@ async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
       checksumSha256: completeResponse.checksum_sha256 ?? null,
       sizeBytes: source.size,
       status: completeResponse.status ?? "processing",
-      readyAt: completeResponse.ready_at
+      readyAt: completeResponse.ready_at,
+      zipSizeBytes: manifest?.zip_size_bytes ?? null
     };
   } finally {
     await rm(tempDir, { force: true, recursive: true });
@@ -677,6 +690,9 @@ async function fetchWharfBase(plan, build) {
   if (build.branch) {
     query.set("branch", build.branch);
   }
+  if (build.zipDelivery) {
+    query.set("zip_delivery", build.zipDelivery);
+  }
   const response = await getJson(
     gameApiUrl(plan, `/builds/wharf/base?${query.toString()}`),
     plan.token
@@ -685,6 +701,110 @@ async function fetchWharfBase(plan, build) {
     buildId: response.build_id ?? response.buildId ?? null,
     signatureUrl: response.signature_url ?? response.signatureUrl ?? null
   };
+}
+
+const CHUNK_ANNOUNCE_BATCH = 1000;
+const CHUNK_UPLOAD_CONCURRENCY = 8;
+const MANIFEST_VERIFY_TIMEOUT_MS = 45 * 60 * 1000;
+
+// Uploads the build folder as chunks plus a manifest, then waits until
+// Testing Floor has verified every chunk and file checksum. Only chunks the
+// game hasn't stored before are uploaded.
+async function uploadChunkManifest(plan, buildId, buildDirectory, { log, pollIntervalMs = 5000 }) {
+  log(`Splitting ${buildDirectory} into chunks for zip downloads`);
+  const { entries, objects } = await chunkBuildDirectory(buildDirectory);
+  const objectList = [...objects.entries()];
+  const totalBytes = objectList.reduce((sum, [, object]) => sum + object.size, 0);
+  log(`${entries.length} entries in ${objectList.length} chunks (${formatBytes(totalBytes)})`);
+
+  const missing = [];
+  for (let index = 0; index < objectList.length; index += CHUNK_ANNOUNCE_BATCH) {
+    const batch = objectList.slice(index, index + CHUNK_ANNOUNCE_BATCH);
+    const response = await postJson(`${plan.apiUrl}/api/game_builds/${buildId}/chunks`, plan.token, {
+      chunks: batch.map(([sha256, object]) => ({ sha256, byte_size: object.size }))
+    });
+    missing.push(...(response.missing ?? []));
+  }
+
+  const missingBytes = missing.reduce((sum, chunk) => sum + objects.get(chunk.sha256).size, 0);
+  log(`Uploading ${missing.length} new chunks (${formatBytes(missingBytes)}); the other ${objectList.length - missing.length} are already stored`);
+  await mapWithConcurrency(missing, CHUNK_UPLOAD_CONCURRENCY, (chunk) =>
+    withRetries(`Chunk ${chunk.sha256}`, async () => {
+      const object = objects.get(chunk.sha256);
+      await uploadBuffer(chunk.upload_url, chunk.upload_headers ?? {}, await readObject(object), { label: `Chunk ${chunk.sha256}` });
+    })
+  );
+
+  await postJson(`${plan.apiUrl}/api/game_builds/${buildId}/manifest`, plan.token, {
+    manifest: { modified_at: new Date().toISOString(), entries }
+  });
+
+  log("Waiting for Testing Floor to verify the chunks");
+  const deadline = Date.now() + MANIFEST_VERIFY_TIMEOUT_MS;
+  for (;;) {
+    const status = await getJson(`${plan.apiUrl}/api/game_builds/${buildId}/manifest`, plan.token);
+    if (status.status === "verified") {
+      log(`Zip download ready (${formatBytes(status.zip_size_bytes ?? 0)})`);
+      return status;
+    }
+    if (status.status === "failed") {
+      throw new Error(`Testing Floor rejected build ${buildId}'s chunks: ${status.error}`);
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`Timed out waiting for Testing Floor to verify build ${buildId}'s chunks`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+}
+
+async function mapWithConcurrency(items, limit, worker) {
+  let next = 0;
+  const run = async () => {
+    while (next < items.length) {
+      const item = items[next];
+      next += 1;
+      await worker(item);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
+}
+
+async function withRetries(label, attempt, { attempts = 3 } = {}) {
+  for (let tries = 1; ; tries += 1) {
+    try {
+      return await attempt();
+    } catch (error) {
+      if (tries >= attempts) {
+        throw new Error(`${label} failed after ${attempts} attempts: ${error.message}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500 * tries));
+    }
+  }
+}
+
+function uploadBuffer(uploadUrl, uploadHeaders, body, { label = "Upload" } = {}) {
+  const url = new URL(uploadUrl);
+  const client = url.protocol === "https:" ? https : http;
+  const headers = compactHeaders({ ...uploadHeaders, "Content-Length": String(body.length) });
+
+  return new Promise((resolve, reject) => {
+    const request = client.request(url, { method: "PUT", headers }, (response) => {
+      let text = "";
+      response.setEncoding("utf8");
+      response.on("data", (part) => {
+        text += part;
+      });
+      response.on("end", () => {
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          resolve();
+        } else {
+          reject(new Error(`${label} failed with ${response.statusCode}: ${text}`));
+        }
+      });
+    });
+    request.on("error", reject);
+    request.end(body);
+  });
 }
 
 async function downloadBaseSignature(signatureUrl, tempDir) {
@@ -757,7 +877,8 @@ function buildFromOptions(options) {
     platform: options.platform,
     sourceRef: parseSourceRefEntries(options.sourceRef ?? []),
     version: options.version,
-    workingDirectory: options.workingDirectory
+    workingDirectory: options.workingDirectory,
+    zipDelivery: options.zipDelivery
   };
 }
 
@@ -779,8 +900,23 @@ function normalizeBuild(build, { configDir, cwd, commonVersion, commonGitSha, co
       ...objectValue(build.sourceRef ?? build.source_ref, "build.sourceRef")
     },
     version: build.version ?? commonVersion,
-    workingDirectory: build.workingDirectory ?? build.working_directory ?? "."
+    workingDirectory: build.workingDirectory ?? build.working_directory ?? ".",
+    zipDelivery: normalizeZipDelivery(build.zipDelivery ?? build.zip_delivery)
   };
+}
+
+// "chunk-manifest" uploads the build folder as content-addressed chunks plus a
+// manifest, which Testing Floor's build-delivery Worker streams as the zip
+// download, instead of the server building a zip from the wharf patch.
+function normalizeZipDelivery(value) {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+  const normalized = String(value).trim().replace(/-/g, "_");
+  if (normalized !== "chunk_manifest") {
+    throw new Error(`Unsupported zip delivery "${value}". Expected chunk-manifest.`);
+  }
+  return normalized;
 }
 
 function defaultBuildFilename(archive, archiveKind) {
@@ -837,6 +973,10 @@ function validatePlan(plan) {
 
     if (!build.archivePath) {
       throw new Error(`Missing archive path for ${build.platform}.`);
+    }
+
+    if (build.zipDelivery && build.archiveKind !== "wharf") {
+      throw new Error(`zip-delivery chunk-manifest needs archive-kind wharf (${build.platform}).`);
     }
 
     if (!build.version) {

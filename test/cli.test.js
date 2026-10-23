@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { createHash, randomBytes } from "node:crypto";
 import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { crc32 } from "node:zlib";
 
 import {
   butlerDownloadUrl,
@@ -683,6 +685,143 @@ test("uploadBuild creates and uploads wharf patch artifacts", async (t) => {
   });
 });
 
+function chunkDeliveryServer({ manifestStatuses, alreadyStored = 1 }) {
+  const state = { announced: [], uploads: {}, manifest: null, createPayload: null, wharfBaseUrl: null, polls: 0 };
+  const server = http.createServer(async (request, response) => {
+    try {
+      if (request.method === "GET" && request.url.startsWith("/api/organizations/gamedepartment/games/42/builds/wharf/base")) {
+        state.wharfBaseUrl = request.url;
+        writeJson(response, 200, { build_id: null, signature_url: null });
+        return;
+      }
+      if (request.method === "POST" && request.url === "/api/organizations/gamedepartment/games/42/builds") {
+        state.createPayload = JSON.parse(await readRequestBody(request));
+        const upload = (name) => ({ signed_id: `${name}-signed`, upload_strategy: "direct", upload_url: `${serverUrl(server)}/uploads/${name}`, upload_headers: {} });
+        writeJson(response, 201, { id: 8, archive_kind: "wharf", uploads: { patch: upload("patch"), signature: upload("signature") } });
+        return;
+      }
+      if (request.method === "PUT" && request.url.startsWith("/uploads/")) {
+        await readRequestBody(request);
+        response.writeHead(200);
+        response.end();
+        return;
+      }
+      if (request.method === "POST" && request.url === "/api/game_builds/8/complete") {
+        await readRequestBody(request);
+        writeJson(response, 200, { id: 8, status: "ready" });
+        return;
+      }
+      if (request.method === "POST" && request.url === "/api/game_builds/8/chunks") {
+        const { chunks } = JSON.parse(await readRequestBody(request));
+        state.announced.push(...chunks);
+        const missing = chunks.slice(alreadyStored).map((chunk) => ({ sha256: chunk.sha256, upload_url: `${serverUrl(server)}/chunk-uploads/${chunk.sha256}` }));
+        writeJson(response, 200, { missing });
+        return;
+      }
+      if (request.method === "PUT" && request.url.startsWith("/chunk-uploads/")) {
+        state.uploads[request.url.split("/").pop()] = Buffer.from(await readRequestBody(request, { binary: true }));
+        response.writeHead(200);
+        response.end();
+        return;
+      }
+      if (request.method === "POST" && request.url === "/api/game_builds/8/manifest") {
+        state.manifest = JSON.parse(await readRequestBody(request)).manifest;
+        writeJson(response, 202, { status: "pending" });
+        return;
+      }
+      if (request.method === "GET" && request.url === "/api/game_builds/8/manifest") {
+        const status = manifestStatuses[Math.min(state.polls, manifestStatuses.length - 1)];
+        state.polls += 1;
+        writeJson(response, 200, status);
+        return;
+      }
+      response.writeHead(404);
+      response.end();
+    } catch (error) {
+      response.writeHead(500);
+      response.end(error.stack);
+    }
+  });
+  return { server, state };
+}
+
+async function chunkDeliveryUpload(server, cwd, buildDir) {
+  return uploadBuild(
+    { apiUrl: serverUrl(server), butlerPath: await writeFakeButler(cwd), organizationId: "gamedepartment", gameId: "42", token: "tf_test" },
+    {
+      archiveKind: "wharf",
+      zipDelivery: "chunk_manifest",
+      archivePath: buildDir,
+      filename: "game.zip",
+      launchArgs: [],
+      launchPath: "Game.exe",
+      platform: "windows",
+      sourceRef: {},
+      version: "0.5.0",
+      workingDirectory: "."
+    },
+    { log: () => {}, pollIntervalMs: 1 }
+  );
+}
+
+test("uploadBuild uploads new chunks and a manifest for chunk zip delivery", async (t) => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  const buildDir = path.join(cwd, "game");
+  await mkdir(path.join(buildDir, "Data"), { recursive: true });
+  await writeFile(path.join(buildDir, "Game.exe"), randomBytes(3 << 20));
+  await writeFile(path.join(buildDir, "Data", "settings.ini"), "[game]\nfullscreen=1\n");
+  const { server, state } = chunkDeliveryServer({
+    manifestStatuses: [{ status: "pending" }, { status: "verified", zip_size_bytes: 3_145_900 }]
+  });
+  await listen(server);
+  t.after(() => server.close());
+
+  const result = await chunkDeliveryUpload(server, cwd, buildDir);
+
+  assert.equal(result.buildId, 8);
+  assert.equal(result.zipSizeBytes, 3_145_900);
+  assert.equal(state.createPayload.zip_delivery, "chunk_manifest");
+  assert.match(state.wharfBaseUrl, /zip_delivery=chunk_manifest/);
+  assert.ok(state.announced.length >= 2, "the big file and the packed small file");
+  assert.deepEqual(Object.keys(state.uploads).sort(), state.announced.slice(1).map((chunk) => chunk.sha256).sort(), "only missing chunks are uploaded");
+  for (const [sha256, body] of Object.entries(state.uploads)) {
+    assert.equal(createHash("sha256").update(body).digest("hex"), sha256);
+  }
+  const settings = state.manifest.entries.find((entry) => entry.path === "Data/settings.ini");
+  assert.equal(settings.crc32, crc32(Buffer.from("[game]\nfullscreen=1\n")));
+  assert.equal(state.manifest.entries.find((entry) => entry.path === "Data").type, "directory");
+  assert.equal(state.polls, 2);
+});
+
+test("uploadBuild fails when Testing Floor rejects the chunks", async (t) => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  const buildDir = path.join(cwd, "game");
+  await mkdir(buildDir);
+  await writeFile(path.join(buildDir, "Game.exe"), "binary");
+  const { server } = chunkDeliveryServer({
+    manifestStatuses: [{ status: "failed", error: "Chunk abc doesn't match its SHA-256" }],
+    alreadyStored: 0
+  });
+  await listen(server);
+  t.after(() => server.close());
+
+  await assert.rejects(chunkDeliveryUpload(server, cwd, buildDir), /rejected build 8's chunks: Chunk abc doesn't match its SHA-256/);
+});
+
+test("resolveUploadPlan requires wharf for chunk zip delivery", async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  await writeFile(path.join(cwd, "game.zip"), "zip");
+
+  await assert.rejects(
+    resolveUploadPlan(
+      { token: "tf", organizationId: "org", gameId: "42", platform: "windows", archive: "game.zip", version: "1", launchPath: "Game.exe", zipDelivery: "chunk-manifest" },
+      {},
+      cwd
+    ),
+    /needs archive-kind wharf/
+  );
+});
+
 test("parseJsonInput validates action JSON inputs", () => {
   assert.deepEqual(parseJsonInput("[\"--safe\"]", "launch-args"), ["--safe"]);
   assert.deepEqual(parseJsonInput("{\"run_id\":\"123\"}", "source-ref"), { run_id: "123" });
@@ -1076,12 +1215,15 @@ function serverUrl(server) {
   return `http://${address.address}:${address.port}`;
 }
 
-function readRequestBody(request) {
+function readRequestBody(request, { binary = false } = {}) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     request.on("data", (chunk) => chunks.push(chunk));
     request.on("error", reject);
-    request.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    request.on("end", () => {
+      const body = Buffer.concat(chunks);
+      resolve(binary ? body : body.toString("utf8"));
+    });
   });
 }
 

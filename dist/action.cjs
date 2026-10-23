@@ -1063,14 +1063,14 @@ var require_util = __commonJS({
         }
         const port = url.port != null ? url.port : url.protocol === "https:" ? 443 : 80;
         let origin = url.origin != null ? url.origin : `${url.protocol || ""}//${url.hostname || ""}:${port}`;
-        let path8 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
+        let path9 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
         if (origin[origin.length - 1] === "/") {
           origin = origin.slice(0, origin.length - 1);
         }
-        if (path8 && path8[0] !== "/") {
-          path8 = `/${path8}`;
+        if (path9 && path9[0] !== "/") {
+          path9 = `/${path9}`;
         }
-        return new URL(`${origin}${path8}`);
+        return new URL(`${origin}${path9}`);
       }
       if (!isHttpOrHttpsPrefixed(url.origin || url.protocol)) {
         throw new InvalidArgumentError("Invalid URL protocol: the URL must start with `http:` or `https:`.");
@@ -1521,39 +1521,39 @@ var require_diagnostics = __commonJS({
       });
       diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
         const {
-          request: { method, path: path8, origin }
+          request: { method, path: path9, origin }
         } = evt;
-        debuglog("sending request to %s %s/%s", method, origin, path8);
+        debuglog("sending request to %s %s/%s", method, origin, path9);
       });
       diagnosticsChannel.channel("undici:request:headers").subscribe((evt) => {
         const {
-          request: { method, path: path8, origin },
+          request: { method, path: path9, origin },
           response: { statusCode }
         } = evt;
         debuglog(
           "received response to %s %s/%s - HTTP %d",
           method,
           origin,
-          path8,
+          path9,
           statusCode
         );
       });
       diagnosticsChannel.channel("undici:request:trailers").subscribe((evt) => {
         const {
-          request: { method, path: path8, origin }
+          request: { method, path: path9, origin }
         } = evt;
-        debuglog("trailers received from %s %s/%s", method, origin, path8);
+        debuglog("trailers received from %s %s/%s", method, origin, path9);
       });
       diagnosticsChannel.channel("undici:request:error").subscribe((evt) => {
         const {
-          request: { method, path: path8, origin },
+          request: { method, path: path9, origin },
           error
         } = evt;
         debuglog(
           "request to %s %s/%s errored - %s",
           method,
           origin,
-          path8,
+          path9,
           error.message
         );
       });
@@ -1602,9 +1602,9 @@ var require_diagnostics = __commonJS({
         });
         diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
           const {
-            request: { method, path: path8, origin }
+            request: { method, path: path9, origin }
           } = evt;
-          debuglog("sending request to %s %s/%s", method, origin, path8);
+          debuglog("sending request to %s %s/%s", method, origin, path9);
         });
       }
       diagnosticsChannel.channel("undici:websocket:open").subscribe((evt) => {
@@ -1667,7 +1667,7 @@ var require_request = __commonJS({
     var kHandler = /* @__PURE__ */ Symbol("handler");
     var Request = class {
       constructor(origin, {
-        path: path8,
+        path: path9,
         method,
         body,
         headers,
@@ -1682,11 +1682,11 @@ var require_request = __commonJS({
         expectContinue,
         servername
       }, handler) {
-        if (typeof path8 !== "string") {
+        if (typeof path9 !== "string") {
           throw new InvalidArgumentError("path must be a string");
-        } else if (path8[0] !== "/" && !(path8.startsWith("http://") || path8.startsWith("https://")) && method !== "CONNECT") {
+        } else if (path9[0] !== "/" && !(path9.startsWith("http://") || path9.startsWith("https://")) && method !== "CONNECT") {
           throw new InvalidArgumentError("path must be an absolute URL or start with a slash");
-        } else if (invalidPathRegex.test(path8)) {
+        } else if (invalidPathRegex.test(path9)) {
           throw new InvalidArgumentError("invalid request path");
         }
         if (typeof method !== "string") {
@@ -1752,7 +1752,7 @@ var require_request = __commonJS({
         this.completed = false;
         this.aborted = false;
         this.upgrade = upgrade || null;
-        this.path = query ? buildURL(path8, query) : path8;
+        this.path = query ? buildURL(path9, query) : path9;
         this.origin = origin;
         this.idempotent = idempotent == null ? method === "HEAD" || method === "GET" : idempotent;
         this.blocking = blocking == null ? false : blocking;
@@ -6278,7 +6278,7 @@ var require_client_h1 = __commonJS({
       return method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && method !== "TRACE" && method !== "CONNECT";
     }
     function writeH1(client, request) {
-      const { method, path: path8, host, upgrade, blocking, reset } = request;
+      const { method, path: path9, host, upgrade, blocking, reset } = request;
       let { body, headers, contentLength } = request;
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH" || method === "QUERY" || method === "PROPFIND" || method === "PROPPATCH";
       if (util3.isFormDataLike(body)) {
@@ -6344,7 +6344,7 @@ var require_client_h1 = __commonJS({
       if (blocking) {
         socket[kBlocking] = true;
       }
-      let header = `${method} ${path8} HTTP/1.1\r
+      let header = `${method} ${path9} HTTP/1.1\r
 `;
       if (typeof host === "string") {
         header += `host: ${host}\r
@@ -6870,7 +6870,7 @@ var require_client_h2 = __commonJS({
     }
     function writeH2(client, request) {
       const session = client[kHTTP2Session];
-      const { method, path: path8, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
+      const { method, path: path9, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
       let { body } = request;
       if (upgrade) {
         util3.errorRequest(client, request, new Error("Upgrade not supported for H2"));
@@ -6937,7 +6937,7 @@ var require_client_h2 = __commonJS({
         });
         return true;
       }
-      headers[HTTP2_HEADER_PATH] = path8;
+      headers[HTTP2_HEADER_PATH] = path9;
       headers[HTTP2_HEADER_SCHEME] = "https";
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body && typeof body.read === "function") {
@@ -7290,9 +7290,9 @@ var require_redirect_handler = __commonJS({
           return this.handler.onHeaders(statusCode, headers, resume, statusText);
         }
         const { origin, pathname, search } = util3.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
-        const path8 = search ? `${pathname}${search}` : pathname;
+        const path9 = search ? `${pathname}${search}` : pathname;
         this.opts.headers = cleanRequestHeaders(this.opts.headers, statusCode === 303, this.opts.origin !== origin);
-        this.opts.path = path8;
+        this.opts.path = path9;
         this.opts.origin = origin;
         this.opts.maxRedirections = 0;
         this.opts.query = null;
@@ -8527,10 +8527,10 @@ var require_proxy_agent = __commonJS({
         };
         const {
           origin,
-          path: path8 = "/",
+          path: path9 = "/",
           headers = {}
         } = opts;
-        opts.path = origin + path8;
+        opts.path = origin + path9;
         if (!("host" in headers) && !("Host" in headers)) {
           const { host } = new URL2(origin);
           headers.host = host;
@@ -10451,20 +10451,20 @@ var require_mock_utils = __commonJS({
       }
       return true;
     }
-    function safeUrl(path8) {
-      if (typeof path8 !== "string") {
-        return path8;
+    function safeUrl(path9) {
+      if (typeof path9 !== "string") {
+        return path9;
       }
-      const pathSegments = path8.split("?");
+      const pathSegments = path9.split("?");
       if (pathSegments.length !== 2) {
-        return path8;
+        return path9;
       }
       const qp = new URLSearchParams(pathSegments.pop());
       qp.sort();
       return [...pathSegments, qp.toString()].join("?");
     }
-    function matchKey(mockDispatch2, { path: path8, method, body, headers }) {
-      const pathMatch = matchValue(mockDispatch2.path, path8);
+    function matchKey(mockDispatch2, { path: path9, method, body, headers }) {
+      const pathMatch = matchValue(mockDispatch2.path, path9);
       const methodMatch = matchValue(mockDispatch2.method, method);
       const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body) : true;
       const headersMatch = matchHeaders(mockDispatch2, headers);
@@ -10486,7 +10486,7 @@ var require_mock_utils = __commonJS({
     function getMockDispatch(mockDispatches, key) {
       const basePath = key.query ? buildURL(key.path, key.query) : key.path;
       const resolvedPath = typeof basePath === "string" ? safeUrl(basePath) : basePath;
-      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path8 }) => matchValue(safeUrl(path8), resolvedPath));
+      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path9 }) => matchValue(safeUrl(path9), resolvedPath));
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for path '${resolvedPath}'`);
       }
@@ -10524,9 +10524,9 @@ var require_mock_utils = __commonJS({
       }
     }
     function buildKey(opts) {
-      const { path: path8, method, body, headers, query } = opts;
+      const { path: path9, method, body, headers, query } = opts;
       return {
-        path: path8,
+        path: path9,
         method,
         body,
         headers,
@@ -10989,10 +10989,10 @@ var require_pending_interceptors_formatter = __commonJS({
       }
       format(pendingInterceptors) {
         const withPrettyHeaders = pendingInterceptors.map(
-          ({ method, path: path8, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
+          ({ method, path: path9, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
             Method: method,
             Origin: origin,
-            Path: path8,
+            Path: path9,
             "Status code": statusCode,
             Persistent: persist ? PERSISTENT : NOT_PERSISTENT,
             Invocations: timesInvoked,
@@ -15873,9 +15873,9 @@ var require_util6 = __commonJS({
         }
       }
     }
-    function validateCookiePath(path8) {
-      for (let i = 0; i < path8.length; ++i) {
-        const code = path8.charCodeAt(i);
+    function validateCookiePath(path9) {
+      for (let i = 0; i < path9.length; ++i) {
+        const code = path9.charCodeAt(i);
         if (code < 32 || // exclude CTLs (0-31)
         code === 127 || // DEL
         code === 59) {
@@ -18552,11 +18552,11 @@ var require_undici = __commonJS({
           if (typeof opts.path !== "string") {
             throw new InvalidArgumentError("invalid opts.path");
           }
-          let path8 = opts.path;
+          let path9 = opts.path;
           if (!opts.path.startsWith("/")) {
-            path8 = `/${path8}`;
+            path9 = `/${path9}`;
           }
-          url = new URL(util3.parseOrigin(url).origin + path8);
+          url = new URL(util3.parseOrigin(url).origin + path9);
         } else {
           if (!opts) {
             opts = typeof url === "object" ? url : {};
@@ -20560,22 +20560,22 @@ var require_semver2 = __commonJS({
 // node_modules/normalize-path/index.js
 var require_normalize_path = __commonJS({
   "node_modules/normalize-path/index.js"(exports2, module2) {
-    module2.exports = function(path8, stripTrailing) {
-      if (typeof path8 !== "string") {
+    module2.exports = function(path9, stripTrailing) {
+      if (typeof path9 !== "string") {
         throw new TypeError("expected path to be a string");
       }
-      if (path8 === "\\" || path8 === "/") return "/";
-      var len = path8.length;
-      if (len <= 1) return path8;
+      if (path9 === "\\" || path9 === "/") return "/";
+      var len = path9.length;
+      if (len <= 1) return path9;
       var prefix = "";
-      if (len > 4 && path8[3] === "\\") {
-        var ch = path8[2];
-        if ((ch === "?" || ch === ".") && path8.slice(0, 2) === "\\\\") {
-          path8 = path8.slice(2);
+      if (len > 4 && path9[3] === "\\") {
+        var ch = path9[2];
+        if ((ch === "?" || ch === ".") && path9.slice(0, 2) === "\\\\") {
+          path9 = path9.slice(2);
           prefix = "//";
         }
       }
-      var segs = path8.split(/[/\\]+/);
+      var segs = path9.split(/[/\\]+/);
       if (stripTrailing !== false && segs[segs.length - 1] === "") {
         segs.pop();
       }
@@ -27117,12 +27117,12 @@ var require_crc32 = __commonJS({
 });
 
 // src/action-core.js
-var import_node_fs3 = require("node:fs");
-var import_promises2 = require("node:fs/promises");
+var import_node_fs4 = require("node:fs");
+var import_promises3 = require("node:fs/promises");
 var import_node_os2 = __toESM(require("node:os"), 1);
-var import_node_path2 = __toESM(require("node:path"), 1);
+var import_node_path3 = __toESM(require("node:path"), 1);
 var import_node_process3 = __toESM(require("node:process"), 1);
-var import_promises3 = require("node:stream/promises");
+var import_promises4 = require("node:stream/promises");
 
 // node_modules/@actions/core/lib/command.js
 var os = __toESM(require("os"), 1);
@@ -30605,21 +30605,178 @@ function writeOutput(name, value, env) {
 }
 
 // src/cli.js
-var import_node_crypto = require("node:crypto");
+var import_node_crypto2 = require("node:crypto");
 var import_node_child_process = require("node:child_process");
-var import_node_fs2 = require("node:fs");
-var import_promises = require("node:fs/promises");
+var import_node_fs3 = require("node:fs");
+var import_promises2 = require("node:fs/promises");
 var import_node_http = __toESM(require("node:http"), 1);
 var import_node_https = __toESM(require("node:https"), 1);
 var import_node_os = __toESM(require("node:os"), 1);
-var import_node_path = __toESM(require("node:path"), 1);
+var import_node_path2 = __toESM(require("node:path"), 1);
 var import_node_process2 = __toESM(require("node:process"), 1);
+
+// src/chunks.js
+var import_node_crypto = require("node:crypto");
+var import_node_fs2 = require("node:fs");
+var import_promises = require("node:fs/promises");
+var import_node_path = __toESM(require("node:path"), 1);
+var import_node_zlib = require("node:zlib");
+var CHUNKING = Object.freeze({
+  minSize: 1 << 20,
+  maskBits: 21,
+  maxSize: 8 << 20,
+  packThreshold: 256 << 10,
+  packTarget: 4 << 20
+});
+var GEAR = (() => {
+  const table = new Uint32Array(256);
+  let x = 2654435769;
+  for (let index = 0; index < 256; index += 1) {
+    x ^= x << 13;
+    x >>>= 0;
+    x ^= x >>> 17;
+    x ^= x << 5;
+    x >>>= 0;
+    table[index] = x;
+  }
+  return table;
+})();
+var TYPE_BITS = { file: 32768, directory: 16384, symlink: 40960 };
+async function chunkBuildDirectory(root, options = {}) {
+  const settings = { ...CHUNKING, ...options };
+  const objects = /* @__PURE__ */ new Map();
+  const entries = [];
+  let pack = null;
+  const addObject = (sha256, size, source) => {
+    if (!objects.has(sha256)) objects.set(sha256, { size, source });
+  };
+  const flushPack = () => {
+    if (!pack) return;
+    const sha256 = pack.hash.digest("hex");
+    addObject(sha256, pack.size, { kind: "pack", files: pack.files });
+    for (const ref of pack.refs) ref.object = sha256;
+    pack = null;
+  };
+  for (const item of await walk(root)) {
+    if (item.type === "directory") {
+      entries.push({ type: "directory", path: item.path, mode: TYPE_BITS.directory | item.stat.mode & 511 });
+    } else if (item.type === "symlink") {
+      const target = (await (0, import_promises.readlink)(item.absolutePath)).split(import_node_path.default.sep).join("/");
+      entries.push({ type: "symlink", path: item.path, mode: TYPE_BITS.symlink | 511, target });
+    } else if (item.stat.size > 0 && item.stat.size < settings.packThreshold) {
+      const bytes = await (0, import_promises.readFile)(item.absolutePath);
+      if (pack && pack.size + bytes.length > settings.packTarget) flushPack();
+      pack ??= { hash: (0, import_node_crypto.createHash)("sha256"), size: 0, files: [], refs: [] };
+      const ref = { object: null, offset: pack.size, size: bytes.length };
+      pack.hash.update(bytes);
+      pack.files.push(item.absolutePath);
+      pack.refs.push(ref);
+      pack.size += bytes.length;
+      entries.push(fileEntry(item, (0, import_node_zlib.crc32)(bytes), [ref]));
+    } else {
+      const { fileCrc, chunks } = await chunkFile(item.absolutePath, settings);
+      for (const chunk of chunks) {
+        addObject(chunk.sha256, chunk.size, {
+          kind: "range",
+          path: item.absolutePath,
+          start: chunk.start,
+          end: chunk.start + chunk.size - 1
+        });
+      }
+      entries.push(fileEntry(item, fileCrc, chunks.map((chunk) => ({ object: chunk.sha256, offset: 0, size: chunk.size }))));
+    }
+  }
+  flushPack();
+  return { entries, objects };
+}
+async function readObject(object) {
+  if (object.source.kind === "pack") {
+    return Buffer.concat(await Promise.all(object.source.files.map((file) => (0, import_promises.readFile)(file))));
+  }
+  const parts = [];
+  for await (const part of (0, import_node_fs2.createReadStream)(object.source.path, { start: object.source.start, end: object.source.end })) {
+    parts.push(part);
+  }
+  return Buffer.concat(parts);
+}
+function fileEntry(item, fileCrc, chunks) {
+  return {
+    type: "file",
+    path: item.path,
+    mode: TYPE_BITS.file | item.stat.mode & 511,
+    size: item.stat.size,
+    crc32: fileCrc,
+    chunks
+  };
+}
+async function chunkFile(filePath, { minSize, maskBits, maxSize }) {
+  const mask = 2 ** maskBits - 1;
+  const chunks = [];
+  let fileCrc = 0;
+  let chunkStart = 0;
+  let chunkLength = 0;
+  let gear = 0;
+  let hash = (0, import_node_crypto.createHash)("sha256");
+  for await (const buffer of (0, import_node_fs2.createReadStream)(filePath, { highWaterMark: 1 << 20 })) {
+    fileCrc = (0, import_node_zlib.crc32)(buffer, fileCrc);
+    let segmentStart = 0;
+    let index = 0;
+    while (index < buffer.length) {
+      if (chunkLength < minSize) {
+        const skip = Math.min(minSize - chunkLength, buffer.length - index);
+        chunkLength += skip;
+        index += skip;
+        continue;
+      }
+      gear = (gear << 1) + GEAR[buffer[index]] >>> 0;
+      chunkLength += 1;
+      index += 1;
+      if ((gear & mask) === 0 || chunkLength >= maxSize) {
+        hash.update(buffer.subarray(segmentStart, index));
+        chunks.push({ sha256: hash.digest("hex"), start: chunkStart, size: chunkLength });
+        chunkStart += chunkLength;
+        chunkLength = 0;
+        gear = 0;
+        hash = (0, import_node_crypto.createHash)("sha256");
+        segmentStart = index;
+      }
+    }
+    if (segmentStart < buffer.length) hash.update(buffer.subarray(segmentStart));
+  }
+  if (chunkLength > 0) chunks.push({ sha256: hash.digest("hex"), start: chunkStart, size: chunkLength });
+  return { fileCrc, chunks };
+}
+async function walk(root) {
+  const items = [];
+  async function visit(directory, relativeDirectory) {
+    const names = [];
+    for await (const entry of await (0, import_promises.opendir)(directory)) names.push(entry.name);
+    names.sort();
+    for (const name of names) {
+      const absolutePath = import_node_path.default.join(directory, name);
+      const relativePath = relativeDirectory ? `${relativeDirectory}/${name}` : name;
+      const stat4 = await (0, import_promises.lstat)(absolutePath);
+      if (stat4.isSymbolicLink()) {
+        items.push({ type: "symlink", path: relativePath, absolutePath, stat: stat4 });
+      } else if (stat4.isDirectory()) {
+        items.push({ type: "directory", path: relativePath, absolutePath, stat: stat4 });
+        await visit(absolutePath, relativePath);
+      } else if (stat4.isFile()) {
+        items.push({ type: "file", path: relativePath, absolutePath, stat: stat4 });
+      }
+    }
+  }
+  await visit(root, "");
+  return items;
+}
+
+// src/cli.js
 var DEFAULT_API_URL = "https://api.testingfloor.com";
 var PLATFORMS = /* @__PURE__ */ new Set(["windows", "macos", "linux"]);
 async function resolveUploadPlan(options, env = {}, cwd = import_node_process2.default.cwd()) {
-  const configPath = options.config ? import_node_path.default.resolve(cwd, options.config) : null;
+  const configPath = options.config ? import_node_path2.default.resolve(cwd, options.config) : null;
   const config = configPath ? await readJson(configPath) : {};
-  const configDir = configPath ? import_node_path.default.dirname(configPath) : cwd;
+  const configDir = configPath ? import_node_path2.default.dirname(configPath) : cwd;
   const cliBuildRequested = Boolean(options.platform || options.archive || options.launchPath);
   const configuredBuilds = normalizeConfiguredBuilds(config);
   if (cliBuildRequested && configuredBuilds.length > 0) {
@@ -30696,7 +30853,7 @@ function parseSourceRefEntries(entries) {
     return sourceRef;
   }, {});
 }
-async function uploadBuild(plan, build, { log = console.error } = {}) {
+async function uploadBuild(plan, build, { log = console.error, pollIntervalMs } = {}) {
   if (build.archiveKind === "wharf") {
     return uploadWharfBuild(plan, build, { log });
   }
@@ -30753,14 +30910,17 @@ async function uploadBuild(plan, build, { log = console.error } = {}) {
     readyAt: completeResponse.ready_at
   };
 }
-async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
+async function uploadWharfBuild(plan, build, { log = console.error, pollIntervalMs } = {}) {
   const source = await pathInfo(build.archivePath, { allowDirectory: true, label: "Build source" });
+  if (build.zipDelivery && !(await (0, import_promises2.stat)(build.archivePath)).isDirectory()) {
+    throw new Error(`zip-delivery chunk-manifest needs a build directory, not an archive: ${build.archivePath}`);
+  }
   log(`Creating ${build.platform} wharf patch from ${build.archivePath}`);
-  const tempDir = await (0, import_promises.mkdtemp)(import_node_path.default.join(import_node_os.default.tmpdir(), "testingfloor-wharf-"));
+  const tempDir = await (0, import_promises2.mkdtemp)(import_node_path2.default.join(import_node_os.default.tmpdir(), "testingfloor-wharf-"));
   try {
     const base = await fetchWharfBase(plan, build);
     const targetSignaturePath = base.signatureUrl ? await downloadBaseSignature(base.signatureUrl, tempDir) : "/dev/null";
-    const patchPath = import_node_path.default.join(tempDir, "patch.pwr");
+    const patchPath = import_node_path2.default.join(tempDir, "patch.pwr");
     const signaturePath = `${patchPath}.sig`;
     await runButlerDiff({
       butlerPath: plan.butlerPath ?? "butler",
@@ -30778,6 +30938,7 @@ async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
       version: build.version,
       git_sha: build.gitSha,
       archive_kind: "wharf",
+      zip_delivery: build.zipDelivery,
       filename: build.filename,
       byte_size: source.size,
       wharf_patch_from_build_id: base.buildId ?? void 0,
@@ -30812,8 +30973,10 @@ async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
         signature_multipart_upload: signatureMultipart ?? void 0
       }
     );
+    const buildId = completeResponse.id ?? createResponse.id;
+    const manifest = build.zipDelivery ? await uploadChunkManifest(plan, buildId, build.archivePath, { log, pollIntervalMs }) : null;
     return {
-      buildId: completeResponse.id ?? createResponse.id,
+      buildId,
       platform: build.platform,
       version: build.version,
       gitSha: build.gitSha,
@@ -30821,16 +30984,20 @@ async function uploadWharfBuild(plan, build, { log = console.error } = {}) {
       checksumSha256: completeResponse.checksum_sha256 ?? null,
       sizeBytes: source.size,
       status: completeResponse.status ?? "processing",
-      readyAt: completeResponse.ready_at
+      readyAt: completeResponse.ready_at,
+      zipSizeBytes: manifest?.zip_size_bytes ?? null
     };
   } finally {
-    await (0, import_promises.rm)(tempDir, { force: true, recursive: true });
+    await (0, import_promises2.rm)(tempDir, { force: true, recursive: true });
   }
 }
 async function fetchWharfBase(plan, build) {
   const query = new URLSearchParams({ platform: build.platform });
   if (build.branch) {
     query.set("branch", build.branch);
+  }
+  if (build.zipDelivery) {
+    query.set("zip_delivery", build.zipDelivery);
   }
   const response = await getJson(
     gameApiUrl(plan, `/builds/wharf/base?${query.toString()}`),
@@ -30841,13 +31008,106 @@ async function fetchWharfBase(plan, build) {
     signatureUrl: response.signature_url ?? response.signatureUrl ?? null
   };
 }
+var CHUNK_ANNOUNCE_BATCH = 1e3;
+var CHUNK_UPLOAD_CONCURRENCY = 8;
+var MANIFEST_VERIFY_TIMEOUT_MS = 45 * 60 * 1e3;
+async function uploadChunkManifest(plan, buildId, buildDirectory, { log, pollIntervalMs = 5e3 }) {
+  log(`Splitting ${buildDirectory} into chunks for zip downloads`);
+  const { entries, objects } = await chunkBuildDirectory(buildDirectory);
+  const objectList = [...objects.entries()];
+  const totalBytes = objectList.reduce((sum, [, object]) => sum + object.size, 0);
+  log(`${entries.length} entries in ${objectList.length} chunks (${formatBytes(totalBytes)})`);
+  const missing = [];
+  for (let index = 0; index < objectList.length; index += CHUNK_ANNOUNCE_BATCH) {
+    const batch = objectList.slice(index, index + CHUNK_ANNOUNCE_BATCH);
+    const response = await postJson(`${plan.apiUrl}/api/game_builds/${buildId}/chunks`, plan.token, {
+      chunks: batch.map(([sha256, object]) => ({ sha256, byte_size: object.size }))
+    });
+    missing.push(...response.missing ?? []);
+  }
+  const missingBytes = missing.reduce((sum, chunk) => sum + objects.get(chunk.sha256).size, 0);
+  log(`Uploading ${missing.length} new chunks (${formatBytes(missingBytes)}); the other ${objectList.length - missing.length} are already stored`);
+  await mapWithConcurrency(
+    missing,
+    CHUNK_UPLOAD_CONCURRENCY,
+    (chunk) => withRetries(`Chunk ${chunk.sha256}`, async () => {
+      const object = objects.get(chunk.sha256);
+      await uploadBuffer(chunk.upload_url, chunk.upload_headers ?? {}, await readObject(object), { label: `Chunk ${chunk.sha256}` });
+    })
+  );
+  await postJson(`${plan.apiUrl}/api/game_builds/${buildId}/manifest`, plan.token, {
+    manifest: { modified_at: (/* @__PURE__ */ new Date()).toISOString(), entries }
+  });
+  log("Waiting for Testing Floor to verify the chunks");
+  const deadline = Date.now() + MANIFEST_VERIFY_TIMEOUT_MS;
+  for (; ; ) {
+    const status = await getJson(`${plan.apiUrl}/api/game_builds/${buildId}/manifest`, plan.token);
+    if (status.status === "verified") {
+      log(`Zip download ready (${formatBytes(status.zip_size_bytes ?? 0)})`);
+      return status;
+    }
+    if (status.status === "failed") {
+      throw new Error(`Testing Floor rejected build ${buildId}'s chunks: ${status.error}`);
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`Timed out waiting for Testing Floor to verify build ${buildId}'s chunks`);
+    }
+    await new Promise((resolve2) => setTimeout(resolve2, pollIntervalMs));
+  }
+}
+async function mapWithConcurrency(items, limit, worker) {
+  let next = 0;
+  const run = async () => {
+    while (next < items.length) {
+      const item = items[next];
+      next += 1;
+      await worker(item);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
+}
+async function withRetries(label, attempt, { attempts = 3 } = {}) {
+  for (let tries = 1; ; tries += 1) {
+    try {
+      return await attempt();
+    } catch (error) {
+      if (tries >= attempts) {
+        throw new Error(`${label} failed after ${attempts} attempts: ${error.message}`);
+      }
+      await new Promise((resolve2) => setTimeout(resolve2, 500 * tries));
+    }
+  }
+}
+function uploadBuffer(uploadUrl, uploadHeaders, body, { label = "Upload" } = {}) {
+  const url = new URL(uploadUrl);
+  const client = url.protocol === "https:" ? import_node_https.default : import_node_http.default;
+  const headers = compactHeaders({ ...uploadHeaders, "Content-Length": String(body.length) });
+  return new Promise((resolve2, reject) => {
+    const request = client.request(url, { method: "PUT", headers }, (response) => {
+      let text = "";
+      response.setEncoding("utf8");
+      response.on("data", (part) => {
+        text += part;
+      });
+      response.on("end", () => {
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          resolve2();
+        } else {
+          reject(new Error(`${label} failed with ${response.statusCode}: ${text}`));
+        }
+      });
+    });
+    request.on("error", reject);
+    request.end(body);
+  });
+}
 async function downloadBaseSignature(signatureUrl, tempDir) {
   const response = await fetch(signatureUrl);
   if (!response.ok) {
     throw new Error(`Base signature download failed with ${response.status}: ${await response.text()}`);
   }
-  const signaturePath = import_node_path.default.join(tempDir, "base.pwr.sig");
-  await (0, import_promises.writeFile)(signaturePath, Buffer.from(await response.arrayBuffer()));
+  const signaturePath = import_node_path2.default.join(tempDir, "base.pwr.sig");
+  await (0, import_promises2.writeFile)(signaturePath, Buffer.from(await response.arrayBuffer()));
   return signaturePath;
 }
 function runButlerDiff({ butlerPath, target, source, patchPath }) {
@@ -30884,7 +31144,7 @@ async function uploadArtifact(uploadSpec, filePath, size, { label, log }) {
   return null;
 }
 async function readJson(filePath) {
-  const raw = await (0, import_promises.readFile)(filePath, "utf8");
+  const raw = await (0, import_promises2.readFile)(filePath, "utf8");
   try {
     return JSON.parse(raw);
   } catch (error) {
@@ -30903,7 +31163,8 @@ function buildFromOptions(options) {
     platform: options.platform,
     sourceRef: parseSourceRefEntries(options.sourceRef ?? []),
     version: options.version,
-    workingDirectory: options.workingDirectory
+    workingDirectory: options.workingDirectory,
+    zipDelivery: options.zipDelivery
   };
 }
 function normalizeBuild(build, { configDir, cwd, commonVersion, commonGitSha, commonSourceRef, commonBranch }) {
@@ -30923,15 +31184,26 @@ function normalizeBuild(build, { configDir, cwd, commonVersion, commonGitSha, co
       ...objectValue(build.sourceRef ?? build.source_ref, "build.sourceRef")
     },
     version: build.version ?? commonVersion,
-    workingDirectory: build.workingDirectory ?? build.working_directory ?? "."
+    workingDirectory: build.workingDirectory ?? build.working_directory ?? ".",
+    zipDelivery: normalizeZipDelivery(build.zipDelivery ?? build.zip_delivery)
   };
+}
+function normalizeZipDelivery(value) {
+  if (value === void 0 || value === null || value === "") {
+    return void 0;
+  }
+  const normalized = String(value).trim().replace(/-/g, "_");
+  if (normalized !== "chunk_manifest") {
+    throw new Error(`Unsupported zip delivery "${value}". Expected chunk-manifest.`);
+  }
+  return normalized;
 }
 function defaultBuildFilename(archive, archiveKind) {
   if (!archive) {
     return null;
   }
-  const name = import_node_path.default.basename(archive);
-  if (archiveKind === "wharf" && !import_node_path.default.extname(name)) {
+  const name = import_node_path2.default.basename(archive);
+  if (archiveKind === "wharf" && !import_node_path2.default.extname(name)) {
     return `${name}.zip`;
   }
   return name;
@@ -30970,6 +31242,9 @@ function validatePlan(plan) {
     if (!build.archivePath) {
       throw new Error(`Missing archive path for ${build.platform}.`);
     }
+    if (build.zipDelivery && build.archiveKind !== "wharf") {
+      throw new Error(`zip-delivery chunk-manifest needs archive-kind wharf (${build.platform}).`);
+    }
     if (!build.version) {
       throw new Error(`Missing version for ${build.platform}.`);
     }
@@ -30984,8 +31259,8 @@ async function fileInfo(filePath) {
 async function pathInfo(filePath, { allowDirectory, label }) {
   let stats;
   try {
-    await (0, import_promises.access)(filePath);
-    stats = await (0, import_promises.stat)(filePath);
+    await (0, import_promises2.access)(filePath);
+    stats = await (0, import_promises2.stat)(filePath);
   } catch {
     throw new Error(`${label} not found: ${filePath}`);
   }
@@ -31009,10 +31284,10 @@ async function pathInfo(filePath, { allowDirectory, label }) {
 }
 async function directorySize(dir) {
   let total = 0;
-  const handle = await (0, import_promises.opendir)(dir);
+  const handle = await (0, import_promises2.opendir)(dir);
   for await (const entry of handle) {
-    const fullPath = import_node_path.default.join(dir, entry.name);
-    const entryStats = await (0, import_promises.stat)(fullPath);
+    const fullPath = import_node_path2.default.join(dir, entry.name);
+    const entryStats = await (0, import_promises2.stat)(fullPath);
     if (entryStats.isDirectory()) {
       total += await directorySize(fullPath);
     } else if (entryStats.isFile()) {
@@ -31022,10 +31297,10 @@ async function directorySize(dir) {
   return total;
 }
 async function hashFile(filePath) {
-  const md5 = (0, import_node_crypto.createHash)("md5");
-  const sha256 = (0, import_node_crypto.createHash)("sha256");
+  const md5 = (0, import_node_crypto2.createHash)("md5");
+  const sha256 = (0, import_node_crypto2.createHash)("sha256");
   await new Promise((resolve2, reject) => {
-    const stream2 = (0, import_node_fs2.createReadStream)(filePath);
+    const stream2 = (0, import_node_fs3.createReadStream)(filePath);
     stream2.on("data", (chunk) => {
       md5.update(chunk);
       sha256.update(chunk);
@@ -31128,7 +31403,7 @@ function uploadFile(uploadUrl, uploadHeaders, filePath, size, { start, end, labe
       });
     });
     request.on("error", reject);
-    (0, import_node_fs2.createReadStream)(filePath, streamOptions({ start, end })).on("error", reject).pipe(request);
+    (0, import_node_fs3.createReadStream)(filePath, streamOptions({ start, end })).on("error", reject).pipe(request);
   });
 }
 function compactHeaders(headers) {
@@ -31187,7 +31462,7 @@ function objectValue(value, name) {
   return value;
 }
 function resolveBuildPath(filePath, baseDir) {
-  return import_node_path.default.isAbsolute(filePath) ? filePath : import_node_path.default.resolve(baseDir, filePath);
+  return import_node_path2.default.isAbsolute(filePath) ? filePath : import_node_path2.default.resolve(baseDir, filePath);
 }
 function normalizeApiUrl(raw) {
   const url = new URL(raw);
@@ -31247,7 +31522,8 @@ async function runAction(env = import_node_process3.default.env, cwd = import_no
       sourceRefJson: JSON.stringify(inputs.sourceRef),
       token: inputs.apiToken,
       version: inputs.version,
-      workingDirectory: inputs.workingDirectory
+      workingDirectory: inputs.workingDirectory,
+      zipDelivery: inputs.zipDelivery
     },
     env,
     cwd
@@ -31278,7 +31554,8 @@ function readInputs(env) {
     platform: requiredInput(env, "platform"),
     sourceRef: parseJsonInput(input(env, "source-ref") || "{}", "source-ref"),
     version: requiredInput(env, "version"),
-    workingDirectory: input(env, "working-directory") || "."
+    workingDirectory: input(env, "working-directory") || ".",
+    zipDelivery: input(env, "zip-delivery") || void 0
   };
 }
 async function resolveActionButlerPath({
@@ -31310,13 +31587,13 @@ async function setupButler({ version = "LATEST", log = console.error } = {}) {
     log(`Installing butler ${version} for wharf upload`);
     const downloadPath = await downloadTool(butlerDownloadUrl({ version }));
     const extractedDir = await extractZip(downloadPath);
-    const extractedBinary = import_node_path2.default.join(extractedDir, binaryName);
-    await (0, import_promises2.chmod)(extractedBinary, 493).catch(() => {
+    const extractedBinary = import_node_path3.default.join(extractedDir, binaryName);
+    await (0, import_promises3.chmod)(extractedBinary, 493).catch(() => {
     });
     toolDir = cacheable ? await cacheFile(extractedBinary, binaryName, BUTLER_TOOL_NAME, version) : extractedDir;
   }
   addPath(toolDir);
-  return import_node_path2.default.join(toolDir, binaryName);
+  return import_node_path3.default.join(toolDir, binaryName);
 }
 function butlerDownloadUrl({ platform: platform2 = import_node_os2.default.platform(), arch: arch3 = import_node_os2.default.arch(), version = "LATEST" } = {}) {
   return `https://broth.itch.zone/butler/${butlerPlatform(platform2)}-${butlerArch(arch3, platform2)}/${version}/archive/default`;
@@ -31352,9 +31629,9 @@ function resolveActionBuild(inputs, cwd = import_node_process3.default.cwd(), en
   if (!inputs.archive && !inputs.buildDirectory) {
     throw new Error("Set either archive or build-directory.");
   }
-  const archivePath = inputs.archive ? import_node_path2.default.resolve(cwd, inputs.archive) : null;
-  const buildDirectory = inputs.buildDirectory ? import_node_path2.default.resolve(cwd, inputs.buildDirectory) : null;
-  const filename = inputs.filename || (archivePath ? import_node_path2.default.basename(archivePath) : defaultArchiveName({ env, inputs }));
+  const archivePath = inputs.archive ? import_node_path3.default.resolve(cwd, inputs.archive) : null;
+  const buildDirectory = inputs.buildDirectory ? import_node_path3.default.resolve(cwd, inputs.buildDirectory) : null;
+  const filename = inputs.filename || (archivePath ? import_node_path3.default.basename(archivePath) : defaultArchiveName({ env, inputs }));
   return {
     archivePath,
     buildDirectory,
@@ -31381,23 +31658,23 @@ function parseJsonInput(raw, name) {
   return parsed;
 }
 async function zipBuildDirectory({ buildDirectory, archiveName, runnerTemp = import_node_os2.default.tmpdir() }) {
-  const directory = import_node_path2.default.resolve(buildDirectory);
-  const stats = await (0, import_promises2.stat)(directory).catch(() => null);
+  const directory = import_node_path3.default.resolve(buildDirectory);
+  const stats = await (0, import_promises3.stat)(directory).catch(() => null);
   if (!stats?.isDirectory()) {
     throw new Error(`Build directory not found: ${directory}`);
   }
-  await (0, import_promises2.mkdir)(runnerTemp, { recursive: true });
-  const archivePath = import_node_path2.default.join(runnerTemp, archiveName);
+  await (0, import_promises3.mkdir)(runnerTemp, { recursive: true });
+  const archivePath = import_node_path3.default.join(runnerTemp, archiveName);
   await createZipArchive({ directory, archivePath });
-  await (0, import_promises2.access)(archivePath);
+  await (0, import_promises3.access)(archivePath);
   return archivePath;
 }
 async function createZipArchive({ directory, archivePath }) {
   const archive = new ZipStream({ forceZip64: true, zlib: { level: 6 } });
-  const output = (0, import_node_fs3.createWriteStream)(archivePath);
+  const output = (0, import_node_fs4.createWriteStream)(archivePath);
   archive.pipe(output);
-  const archiveDone = (0, import_promises3.finished)(archive);
-  const outputDone = (0, import_promises3.finished)(output);
+  const archiveDone = (0, import_promises4.finished)(archive);
+  const outputDone = (0, import_promises4.finished)(output);
   try {
     for await (const entry of walkArchiveEntries(directory)) {
       if (entry.type === "directory") {
@@ -31415,7 +31692,7 @@ async function createZipArchive({ directory, archivePath }) {
           type: "symlink"
         });
       } else {
-        await addZipEntry(archive, (0, import_node_fs3.createReadStream)(entry.fullPath), {
+        await addZipEntry(archive, (0, import_node_fs4.createReadStream)(entry.fullPath), {
           date: entry.stats.mtime,
           mode: entry.stats.mode,
           name: entry.name
@@ -31432,16 +31709,16 @@ async function createZipArchive({ directory, archivePath }) {
   }
 }
 async function* walkArchiveEntries(root, current = root) {
-  const directory = await (0, import_promises2.opendir)(current);
+  const directory = await (0, import_promises3.opendir)(current);
   for await (const dirent of directory) {
-    const fullPath = import_node_path2.default.join(current, dirent.name);
-    const stats = await (0, import_promises2.lstat)(fullPath);
-    const name = normalizeZipPath(import_node_path2.default.relative(root, fullPath));
+    const fullPath = import_node_path3.default.join(current, dirent.name);
+    const stats = await (0, import_promises3.lstat)(fullPath);
+    const name = normalizeZipPath(import_node_path3.default.relative(root, fullPath));
     if (stats.isDirectory()) {
       yield { fullPath, name: `${name}/`, stats, type: "directory" };
       yield* walkArchiveEntries(root, fullPath);
     } else if (stats.isSymbolicLink()) {
-      yield { fullPath, linkname: await (0, import_promises2.readlink)(fullPath), name, stats, type: "symlink" };
+      yield { fullPath, linkname: await (0, import_promises3.readlink)(fullPath), name, stats, type: "symlink" };
     } else if (stats.isFile()) {
       yield { fullPath, name, stats, type: "file" };
     }
@@ -31459,7 +31736,7 @@ function addZipEntry(archive, source, data) {
   });
 }
 function normalizeZipPath(value) {
-  return value.split(import_node_path2.default.sep).join("/");
+  return value.split(import_node_path3.default.sep).join("/");
 }
 function defaultArchiveName({ env, inputs }) {
   const version = inputs.version || env.GITHUB_SHA || "build";

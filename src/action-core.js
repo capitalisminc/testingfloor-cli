@@ -51,7 +51,8 @@ export async function runAction(env = process.env, cwd = process.cwd()) {
       sourceRefJson: JSON.stringify(inputs.sourceRef),
       token: inputs.apiToken,
       version: inputs.version,
-      workingDirectory: inputs.workingDirectory
+      workingDirectory: inputs.workingDirectory,
+      zipDelivery: inputs.zipDelivery
     },
     env,
     cwd
@@ -84,7 +85,8 @@ export function readInputs(env) {
     platform: requiredInput(env, "platform"),
     sourceRef: parseJsonInput(input(env, "source-ref") || "{}", "source-ref"),
     version: requiredInput(env, "version"),
-    workingDirectory: input(env, "working-directory") || "."
+    workingDirectory: input(env, "working-directory") || ".",
+    zipDelivery: input(env, "zip-delivery") || undefined
   };
 }
 
