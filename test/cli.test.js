@@ -430,10 +430,26 @@ test("butlerDownloadUrl maps runner platforms to itch broth downloads", () => {
   );
 });
 
-function chunkDeliveryServer({ manifestStatuses, alreadyStored = 1, patchUpload = null }) {
-  const state = { announced: [], uploads: {}, parts: [], manifest: null, createPayload: null, completePayload: null, wharfBaseUrl: null, polls: 0 };
+// failures maps "METHOD /path" to what its next requests get instead of an
+// answer: "reset" drops the connection, a number answers with that status and
+// an HTML page, the way a proxy does.
+function chunkDeliveryServer({ manifestStatuses, alreadyStored = 1, patchUpload = null, failures = {} }) {
+  const state = { announced: [], uploads: {}, parts: [], manifest: null, createPayload: null, completePayload: null, wharfBaseUrl: null, polls: 0, requests: {} };
   const server = http.createServer(async (request, response) => {
     try {
+      const route = `${request.method} ${request.url.split("?")[0]}`;
+      state.requests[route] = (state.requests[route] ?? 0) + 1;
+      const failure = failures[route]?.shift();
+      if (failure === "reset") {
+        request.socket.destroy();
+        return;
+      }
+      if (failure) {
+        await readRequestBody(request);
+        response.writeHead(failure, { "Content-Type": "text/html" });
+        response.end("<html><body>Bad gateway</body></html>");
+        return;
+      }
       if (request.method === "GET" && request.url.startsWith("/api/organizations/gamedepartment/games/42/builds/wharf/base")) {
         state.wharfBaseUrl = request.url;
         writeJson(response, 200, { build_id: null, signature_url: null });
@@ -497,7 +513,7 @@ function chunkDeliveryServer({ manifestStatuses, alreadyStored = 1, patchUpload 
   return { server, state };
 }
 
-async function chunkDeliveryUpload(server, cwd, buildDir) {
+async function chunkDeliveryUpload(server, cwd, buildDir, options = {}) {
   return uploadBuild(
     { apiUrl: serverUrl(server), butlerPath: await writeFakeButler(cwd), organizationId: "gamedepartment", gameId: "42", token: "tf_test" },
     {
@@ -510,7 +526,7 @@ async function chunkDeliveryUpload(server, cwd, buildDir) {
       version: "0.5.0",
       workingDirectory: "."
     },
-    { log: () => {}, pollIntervalMs: 1 }
+    { log: () => {}, pollIntervalMs: 1, retryDelaysMs: [1, 1, 1], ...options }
   );
 }
 
@@ -1026,3 +1042,66 @@ fs.writeFileSync(args[3] + ".sig", "signature bytes");
   await chmod(script, 0o755);
   return script;
 }
+
+async function smallBuild() {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  const buildDir = path.join(cwd, "game");
+  await mkdir(buildDir, { recursive: true });
+  await writeFile(path.join(buildDir, "Game.exe"), randomBytes(2048));
+  await writeFile(path.join(buildDir, "readme.txt"), "hello");
+  return { cwd, buildDir };
+}
+
+test("uploadBuild keeps waiting for verification through dropped connections and proxy errors", async (t) => {
+  const { cwd, buildDir } = await smallBuild();
+  const { server, state } = chunkDeliveryServer({
+    manifestStatuses: [{ status: "pending" }, { status: "verified", zip_size_bytes: 4096 }],
+    failures: { "GET /api/game_builds/8/manifest": ["reset", 502, 502, 502, 502, 503] }
+  });
+  await listen(server);
+  t.after(() => server.close());
+  const logged = [];
+
+  const result = await chunkDeliveryUpload(server, cwd, buildDir, { log: (line) => logged.push(line) });
+
+  assert.equal(result.zipSizeBytes, 4096);
+  assert.equal(state.requests["GET /api/game_builds/8/manifest"], 8);
+  assert.ok(logged.some((line) => line.startsWith("Couldn't check verification just now")), "a check that runs out of retries is logged, not fatal");
+});
+
+test("uploadBuild retries announcing chunks and sending the manifest after a server error", async (t) => {
+  const { cwd, buildDir } = await smallBuild();
+  const { server, state } = chunkDeliveryServer({
+    manifestStatuses: [{ status: "verified", zip_size_bytes: 4096 }],
+    failures: { "POST /api/game_builds/8/chunks": [503], "POST /api/game_builds/8/manifest": ["reset"] }
+  });
+  await listen(server);
+  t.after(() => server.close());
+
+  const result = await chunkDeliveryUpload(server, cwd, buildDir);
+
+  assert.equal(result.zipSizeBytes, 4096);
+  assert.equal(state.requests["POST /api/game_builds/8/chunks"], 2);
+  assert.equal(state.requests["POST /api/game_builds/8/manifest"], 2);
+  assert.ok(state.manifest, "the manifest arrives on the retry");
+});
+
+test("uploadBuild doesn't retry creating a build or a request Testing Floor refused", async (t) => {
+  const { cwd, buildDir } = await smallBuild();
+  const created = chunkDeliveryServer({
+    manifestStatuses: [{ status: "verified" }],
+    failures: { "POST /api/organizations/gamedepartment/games/42/builds": [503] }
+  });
+  await listen(created.server);
+  t.after(() => created.server.close());
+
+  await assert.rejects(chunkDeliveryUpload(created.server, cwd, buildDir), /503 Service Unavailable/);
+  assert.equal(created.state.requests["POST /api/organizations/gamedepartment/games/42/builds"], 1, "a retry could create a second build");
+
+  const refused = chunkDeliveryServer({ manifestStatuses: [{ status: "verified" }], failures: { "POST /api/game_builds/8/chunks": [422] } });
+  await listen(refused.server);
+  t.after(() => refused.server.close());
+
+  await assert.rejects(chunkDeliveryUpload(refused.server, cwd, buildDir), /422 Unprocessable Entity/);
+  assert.equal(refused.state.requests["POST /api/game_builds/8/chunks"], 1);
+});
