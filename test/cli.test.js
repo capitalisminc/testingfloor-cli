@@ -434,11 +434,14 @@ test("butlerDownloadUrl maps runner platforms to itch broth downloads", () => {
 // answer: "reset" drops the connection, a number answers with that status and
 // an HTML page, the way a proxy does.
 function chunkDeliveryServer({ manifestStatuses, alreadyStored = 1, patchUpload = null, failures = {} }) {
-  const state = { announced: [], uploads: {}, parts: [], manifest: null, createPayload: null, completePayload: null, wharfBaseUrl: null, polls: 0, requests: {} };
+  const state = { announced: [], uploads: {}, parts: [], manifest: null, createPayload: null, completePayload: null, wharfBaseUrl: null, polls: 0, requests: {}, order: [] };
   const server = http.createServer(async (request, response) => {
     try {
       const route = `${request.method} ${request.url.split("?")[0]}`;
       state.requests[route] = (state.requests[route] ?? 0) + 1;
+      if (route.startsWith("POST /api/game_builds/") || route.startsWith("GET /api/game_builds/")) {
+        state.order.push(route);
+      }
       const failure = failures[route]?.shift();
       if (failure === "reset") {
         request.socket.destroy();
@@ -530,7 +533,7 @@ async function chunkDeliveryUpload(server, cwd, buildDir, options = {}) {
   );
 }
 
-test("uploadBuild sends the wharf patch, then only new chunks and the manifest", async (t) => {
+test("uploadBuild sends the wharf patch, then only new chunks and the manifest, and completes the build once they're verified", async (t) => {
   const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
   const buildDir = path.join(cwd, "game");
   await mkdir(path.join(buildDir, "Data"), { recursive: true });
@@ -558,6 +561,8 @@ test("uploadBuild sends the wharf patch, then only new chunks and the manifest",
   assert.equal(state.manifest.entries.find((entry) => entry.path === "Data").type, "directory");
   assert.equal(state.polls, 2);
   assert.deepEqual(state.completePayload, { patch_signed_id: "patch-signed", signature_signed_id: "signature-signed" });
+  assert.equal(state.order.at(-1), "POST /api/game_builds/8/complete", "the build is offered only once its chunks are verified");
+  assert.equal(state.order.at(-2), "GET /api/game_builds/8/manifest");
 });
 
 test("uploadBuild uploads a large wharf patch in parts and completes with their ETags", async (t) => {
@@ -589,12 +594,12 @@ test("uploadBuild uploads a large wharf patch in parts and completes with their 
   });
 });
 
-test("uploadBuild fails when Testing Floor rejects the chunks", async (t) => {
+test("uploadBuild fails when Testing Floor rejects the chunks, but still completes the build for patch installs", async (t) => {
   const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
   const buildDir = path.join(cwd, "game");
   await mkdir(buildDir);
   await writeFile(path.join(buildDir, "Game.exe"), "binary");
-  const { server } = chunkDeliveryServer({
+  const { server, state } = chunkDeliveryServer({
     manifestStatuses: [{ status: "failed", error: "Chunk abc doesn't match its SHA-256" }],
     alreadyStored: 0
   });
@@ -602,6 +607,8 @@ test("uploadBuild fails when Testing Floor rejects the chunks", async (t) => {
   t.after(() => server.close());
 
   await assert.rejects(chunkDeliveryUpload(server, cwd, buildDir), /rejected build 8's chunks: Chunk abc doesn't match its SHA-256/);
+  assert.deepEqual(state.completePayload, { patch_signed_id: "patch-signed", signature_signed_id: "signature-signed" });
+  assert.equal(state.order.at(-1), "POST /api/game_builds/8/complete");
 });
 
 test("uploadBuild refuses a zip file where a build folder is expected", async () => {

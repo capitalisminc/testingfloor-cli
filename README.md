@@ -44,7 +44,8 @@ You point the CLI at the ready-to-run build folder; there's nothing else to choo
 1. Diffs the folder against the platform's previous build with `butler` and uploads the wharf patch. The desktop recorder updates testers' installs from it. The GitHub Action installs butler for you; when running the CLI directly, put `butler` on `PATH` or pass `--butler-path`.
 2. Splits the folder into content-addressed chunks of about 3 MiB. Boundaries follow the content, so an edit inside a large file only changes the chunks around it. Files under 256 KiB are packed together.
 3. Asks Testing Floor which chunks the game hasn't stored yet, and uploads only those.
-4. Sends the manifest (every folder, file and symlink with its permissions and checksum) and waits until Testing Floor has verified the chunks. Testing Floor then streams the zip download (named by `--filename`) straight from them.
+4. Sends the manifest (every folder, file and symlink with its permissions and checksum) and waits until Testing Floor has verified the chunks.
+5. Completes the build, which makes it available to testers. Testing Floor serves its zip download (named by `--filename`) and the desktop recorder's fresh installs straight from the verified chunks. If the chunks fail, the build is still completed so the recorder can install it from its patch, and the upload fails.
 
 The first upload sends the whole build, uncompressed; later builds send only what changed.
 
