@@ -23207,6 +23207,14 @@ async function uploadBuild(plan, build, { log = console.error, pollIntervalMs, r
       label: "Wharf patch",
       log
     });
+    let manifest = null;
+    let chunkError = null;
+    try {
+      manifest = await uploadChunkManifest(plan, createResponse.id, build.buildDirectory, { log, pollIntervalMs, retryDelaysMs });
+    } catch (error) {
+      chunkError = error;
+      log(`Chunk upload failed (${error.message}); completing the build so the recorder can still install it from its patch`);
+    }
     log(`Completing build ${createResponse.id}`);
     const completeResponse = await postJson(
       `${plan.apiUrl}/api/game_builds/${createResponse.id}/complete`,
@@ -23218,10 +23226,11 @@ async function uploadBuild(plan, build, { log = console.error, pollIntervalMs, r
         signature_multipart_upload: signatureMultipart ?? void 0
       }
     );
-    const buildId = completeResponse.id ?? createResponse.id;
-    const manifest = await uploadChunkManifest(plan, buildId, build.buildDirectory, { log, pollIntervalMs, retryDelaysMs });
+    if (chunkError) {
+      throw chunkError;
+    }
     return {
-      buildId,
+      buildId: completeResponse.id ?? createResponse.id,
       platform: build.platform,
       version: build.version,
       gitSha: build.gitSha,
@@ -23230,7 +23239,7 @@ async function uploadBuild(plan, build, { log = console.error, pollIntervalMs, r
       sizeBytes: source.size,
       status: completeResponse.status ?? "processing",
       readyAt: completeResponse.ready_at,
-      zipSizeBytes: manifest.zip_size_bytes ?? null
+      zipSizeBytes: manifest?.zip_size_bytes ?? null
     };
   } finally {
     await (0, import_promises2.rm)(tempDir, { force: true, recursive: true });
@@ -23256,7 +23265,7 @@ var CHUNK_ANNOUNCE_BATCH = 1e3;
 var CHUNK_UPLOAD_CONCURRENCY = 8;
 var MANIFEST_VERIFY_TIMEOUT_MS = 45 * 60 * 1e3;
 async function uploadChunkManifest(plan, buildId, buildDirectory, { log, pollIntervalMs = 5e3, retryDelaysMs }) {
-  log(`Splitting ${buildDirectory} into chunks for zip downloads`);
+  log(`Splitting ${buildDirectory} into chunks for zip downloads and recorder installs`);
   const { entries, objects } = await chunkBuildDirectory(buildDirectory);
   const objectList = [...objects.entries()];
   const totalBytes = objectList.reduce((sum, [, object]) => sum + object.size, 0);

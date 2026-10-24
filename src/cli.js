@@ -534,10 +534,13 @@ export function parseSourceRefEntries(entries) {
   }, {});
 }
 
-// Every build goes up the same way: a wharf patch the recorder installs from,
+// Every build goes up the same way: a wharf patch the recorder updates from,
 // then the folder as content-addressed chunks plus a manifest, which Testing
-// Floor's build-delivery Worker streams as the zip download. Only chunks the
-// game hasn't stored before are uploaded.
+// Floor serves as the zip download and as the recorder's clean install. Only
+// chunks the game hasn't stored before are uploaded. The build is completed
+// once its chunks are verified, so it's never offered without them. If the
+// chunks fail, it's completed anyway so the recorder can still install it
+// from its patch, and the upload still fails.
 export async function uploadBuild(plan, build, { log = console.error, pollIntervalMs, retryDelaysMs = REQUEST_RETRY_DELAYS_MS } = {}) {
   const source = await pathInfo(build.buildDirectory, { allowDirectory: true, label: "Build directory" });
   if (!(await stat(build.buildDirectory)).isDirectory()) {
@@ -598,6 +601,15 @@ export async function uploadBuild(plan, build, { log = console.error, pollInterv
       log
     });
 
+    let manifest = null;
+    let chunkError = null;
+    try {
+      manifest = await uploadChunkManifest(plan, createResponse.id, build.buildDirectory, { log, pollIntervalMs, retryDelaysMs });
+    } catch (error) {
+      chunkError = error;
+      log(`Chunk upload failed (${error.message}); completing the build so the recorder can still install it from its patch`);
+    }
+
     log(`Completing build ${createResponse.id}`);
     const completeResponse = await postJson(
       `${plan.apiUrl}/api/game_builds/${createResponse.id}/complete`,
@@ -610,11 +622,12 @@ export async function uploadBuild(plan, build, { log = console.error, pollInterv
       }
     );
 
-    const buildId = completeResponse.id ?? createResponse.id;
-    const manifest = await uploadChunkManifest(plan, buildId, build.buildDirectory, { log, pollIntervalMs, retryDelaysMs });
+    if (chunkError) {
+      throw chunkError;
+    }
 
     return {
-      buildId,
+      buildId: completeResponse.id ?? createResponse.id,
       platform: build.platform,
       version: build.version,
       gitSha: build.gitSha,
@@ -623,7 +636,7 @@ export async function uploadBuild(plan, build, { log = console.error, pollInterv
       sizeBytes: source.size,
       status: completeResponse.status ?? "processing",
       readyAt: completeResponse.ready_at,
-      zipSizeBytes: manifest.zip_size_bytes ?? null
+      zipSizeBytes: manifest?.zip_size_bytes ?? null
     };
   } finally {
     await rm(tempDir, { force: true, recursive: true });
@@ -655,7 +668,7 @@ const MANIFEST_VERIFY_TIMEOUT_MS = 45 * 60 * 1000;
 // Testing Floor has verified every chunk and file checksum. Only chunks the
 // game hasn't stored before are uploaded.
 async function uploadChunkManifest(plan, buildId, buildDirectory, { log, pollIntervalMs = 5000, retryDelaysMs }) {
-  log(`Splitting ${buildDirectory} into chunks for zip downloads`);
+  log(`Splitting ${buildDirectory} into chunks for zip downloads and recorder installs`);
   const { entries, objects } = await chunkBuildDirectory(buildDirectory);
   const objectList = [...objects.entries()];
   const totalBytes = objectList.reduce((sum, [, object]) => sum + object.size, 0);
