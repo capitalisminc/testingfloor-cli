@@ -40,6 +40,8 @@ const VALUE_OPTIONS = new Set([
   "organization-id",
   "platform",
   "source-ref-json",
+  "schema",
+  "mode",
   "token",
   "default-variant",
   "variant",
@@ -82,7 +84,47 @@ export async function main(argv = process.argv.slice(2), env = process.env, cwd 
     return;
   }
 
+  if (["get-telemetry-schema", "set-telemetry-schema"].includes(parsed.command)) {
+    const plan = await resolveTelemetryPlan(parsed.options, env, cwd);
+    const updating = parsed.command === "set-telemetry-schema";
+    if (updating && !plan.schemaConfig) throw new Error("Missing --schema JSON file.");
+    if (!updating && plan.schemaConfig) throw new Error("Use set-telemetry-schema to apply --schema.");
+    const result = await telemetrySchema(plan, { update: updating });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
   throw new Error(`Unknown command "${parsed.command}". Run "testingfloor help".`);
+}
+
+export async function resolveTelemetryPlan(options, env = {}, cwd = process.cwd()) {
+  const config = options.config ? await readJson(path.resolve(cwd, options.config)) : {};
+  const plan = {
+    apiUrl: normalizeApiUrl(firstPresent(options.apiUrl, env.TESTING_FLOOR_API_URL, config.apiUrl, DEFAULT_API_URL)),
+    token: firstPresent(options.token, env.TESTING_FLOOR_API_TOKEN, config.token),
+    organizationId: firstPresent(options.organizationId, env.TESTING_FLOOR_ORGANIZATION_ID, config.organizationId),
+    gameId: firstPresent(options.gameId, env.TESTING_FLOOR_GAME_ID, config.gameId),
+    mode: options.mode ?? "merge"
+  };
+  if (!plan.token) throw new Error("Missing API token. Set TESTING_FLOOR_API_TOKEN or pass --token.");
+  if (!plan.organizationId) throw new Error("Missing organization id. Pass --organization-id or set TESTING_FLOOR_ORGANIZATION_ID.");
+  if (!plan.gameId || !/^[A-Za-z0-9_-]+$/.test(String(plan.gameId))) throw new Error("Missing or invalid game id. Pass --game-id or set TESTING_FLOOR_GAME_ID.");
+  if (!["merge", "replace"].includes(plan.mode)) throw new Error("--mode must be merge or replace.");
+  if (options.schema) {
+    plan.schemaConfig = await readJson(path.resolve(cwd, options.schema));
+    if (!plan.schemaConfig || typeof plan.schemaConfig !== "object" || Array.isArray(plan.schemaConfig)) {
+      throw new Error("Schema file must contain a JSON object.");
+    }
+  }
+  return plan;
+}
+
+export async function telemetrySchema(plan, { update = false } = {}) {
+  return requestJson(gameApiUrl(plan, "/telemetry/schema"), plan.token, {
+    method: update ? "PATCH" : "GET",
+    headers: update ? { "Content-Type": "application/json" } : {},
+    body: update ? JSON.stringify({ schema_config: plan.schemaConfig, mode: plan.mode }) : undefined
+  });
 }
 
 export function parseArgs(argv) {
@@ -1269,9 +1311,11 @@ Usage:
   testingfloor upload-build --config testingfloor-builds.json
   testingfloor upload-map --organization-id gamedepartment --game-id 42 --level-id factory --image ./maps/factory.png --bounds 0,0,200,200
   testingfloor upload-map --config testingfloor-maps.json
+  testingfloor get-telemetry-schema --organization-id example-studio --game-id my-game
+  testingfloor set-telemetry-schema --organization-id example-studio --game-id my-game --schema telemetry-schema.json
 
 Environment:
-  TESTING_FLOOR_API_TOKEN       API key (builds:create or maps:sync scope)
+  TESTING_FLOOR_API_TOKEN       API key (builds:create, maps:sync, or telemetry:configure scope)
   TESTING_FLOOR_API_URL         Defaults to ${DEFAULT_API_URL}
   TESTING_FLOOR_ORGANIZATION_ID Organization slug or numeric id
   TESTING_FLOOR_GAME_ID         Numeric game id
@@ -1304,6 +1348,10 @@ Map options:
   --variant-key <key>       Variant key for floors, modes, or alternate map views
   --variant <key>           Alias for --variant-key
   --default-variant <bool>  Whether this variant is the default for the version
+
+Telemetry schema options:
+  --schema <path>          JSON field mappings to apply (set-telemetry-schema)
+  --mode <merge|replace>   Merge mappings by default; replace removes unspecified mappings
 
 Common options:
   --api-url <url>           Testing Floor base URL

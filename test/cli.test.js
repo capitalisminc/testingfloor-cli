@@ -22,7 +22,9 @@ import {
   resolveMapPlan,
   resolveUploadPlan,
   uploadBuild,
-  uploadMap
+  uploadMap,
+  resolveTelemetryPlan,
+  telemetrySchema
 } from "../src/cli.js";
 import { readMapInputs } from "../src/action-map.js";
 
@@ -1111,4 +1113,42 @@ test("uploadBuild doesn't retry creating a build or a request Testing Floor refu
 
   await assert.rejects(chunkDeliveryUpload(refused.server, cwd, buildDir), /422 Unprocessable Entity/);
   assert.equal(refused.state.requests["POST /api/game_builds/8/chunks"], 1);
+});
+
+
+test("telemetry schema plan validates object files and merge mode", async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "tf-schema-"));
+  await writeFile(path.join(cwd, "schema.json"), JSON.stringify({ map_id_path: "game_level.id" }));
+  const env = { TESTING_FLOOR_API_TOKEN: "test-token", TESTING_FLOOR_ORGANIZATION_ID: "example-studio", TESTING_FLOOR_GAME_ID: "my-game" };
+  const parsed = parseArgs(["set-telemetry-schema", "--schema", "schema.json", "--mode", "replace"]);
+  const plan = await resolveTelemetryPlan(parsed.options, env, cwd);
+  assert.equal(plan.mode, "replace");
+  assert.deepEqual(plan.schemaConfig, { map_id_path: "game_level.id" });
+  await assert.rejects(resolveTelemetryPlan({ mode: "unknown" }, env, cwd), /merge or replace/);
+  await writeFile(path.join(cwd, "schema.json"), "[]");
+  await assert.rejects(resolveTelemetryPlan({ schema: "schema.json" }, env, cwd), /JSON object/);
+  await assert.rejects(resolveTelemetryPlan({}, {}, cwd), /Missing API token/);
+});
+
+test("telemetry schema uses authenticated GET and PATCH on the org-qualified API", async () => {
+  const requests = [];
+  const server = http.createServer(async (req, res) => {
+    let body = "";
+    for await (const chunk of req) body += chunk;
+    requests.push({ method: req.method, url: req.url, auth: req.headers.authorization, body: body ? JSON.parse(body) : null });
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify({ schema_config: { map_id_path: "game_level.id" } }));
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const plan = { apiUrl: `http://127.0.0.1:${server.address().port}`, token: "test-token", organizationId: "example-studio", gameId: "my-game", schemaConfig: { map_id_path: "game_level.id" }, mode: "merge" };
+    await telemetrySchema(plan);
+    const result = await telemetrySchema(plan, { update: true });
+    assert.deepEqual(result.schema_config, plan.schemaConfig);
+    assert.deepEqual(requests.map(r => r.method), ["GET", "PATCH"]);
+    assert.equal(requests[0].url, "/api/organizations/example-studio/games/my-game/telemetry/schema");
+    assert.equal(requests[0].auth, "Bearer test-token");
+    assert.equal(requests[0].body, null);
+    assert.deepEqual(requests[1].body, { schema_config: plan.schemaConfig, mode: "merge" });
+  } finally { await new Promise(resolve => server.close(resolve)); }
 });
