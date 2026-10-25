@@ -280,3 +280,29 @@ Map object:
 - `TESTING_FLOOR_BUTLER_PATH`
 
 CLI flags override environment and config values.
+
+
+## Telemetry field mappings
+
+With a user API token scoped to `telemetry:configure` and permission to manage the game:
+
+```sh
+testingfloor get-telemetry-schema --organization-id example-studio --game-id my-game
+testingfloor set-telemetry-schema --organization-id example-studio --game-id my-game --schema telemetry-schema.json
+```
+
+The schema file contains the mappings directly:
+
+```json
+{
+  "map_id_path": "game_level.id",
+  "app_version_path": "tf_context.app_version",
+  "spatial_sources": {
+    "player_position": { "x": "player.position.x", "y": "player.position.y", "z": "player.position.z" }
+  }
+}
+```
+
+Updates merge by default, preserving mappings not mentioned in the file. Use `--mode replace` to remove unspecified mappings. Arrays are replaced when merging. The server validates the full resulting configuration and refreshes affected recording snapshots. Use an empty string to clear an optional field path; use replacement to remove object entries.
+
+The read response includes `schema_config` and the validation `schema`. The matching HTTP endpoint is `GET` / `PATCH /api/organizations/:organization_id/games/:game_id/telemetry/schema`. PATCH accepts `{ "schema_config": { ... }, "mode": "merge" }`.
