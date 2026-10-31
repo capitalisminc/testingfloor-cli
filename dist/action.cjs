@@ -1063,14 +1063,14 @@ var require_util = __commonJS({
         }
         const port = url.port != null ? url.port : url.protocol === "https:" ? 443 : 80;
         let origin = url.origin != null ? url.origin : `${url.protocol || ""}//${url.hostname || ""}:${port}`;
-        let path9 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
+        let path10 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
         if (origin[origin.length - 1] === "/") {
           origin = origin.slice(0, origin.length - 1);
         }
-        if (path9 && path9[0] !== "/") {
-          path9 = `/${path9}`;
+        if (path10 && path10[0] !== "/") {
+          path10 = `/${path10}`;
         }
-        return new URL(`${origin}${path9}`);
+        return new URL(`${origin}${path10}`);
       }
       if (!isHttpOrHttpsPrefixed(url.origin || url.protocol)) {
         throw new InvalidArgumentError("Invalid URL protocol: the URL must start with `http:` or `https:`.");
@@ -1521,39 +1521,39 @@ var require_diagnostics = __commonJS({
       });
       diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
         const {
-          request: { method, path: path9, origin }
+          request: { method, path: path10, origin }
         } = evt;
-        debuglog("sending request to %s %s/%s", method, origin, path9);
+        debuglog("sending request to %s %s/%s", method, origin, path10);
       });
       diagnosticsChannel.channel("undici:request:headers").subscribe((evt) => {
         const {
-          request: { method, path: path9, origin },
+          request: { method, path: path10, origin },
           response: { statusCode }
         } = evt;
         debuglog(
           "received response to %s %s/%s - HTTP %d",
           method,
           origin,
-          path9,
+          path10,
           statusCode
         );
       });
       diagnosticsChannel.channel("undici:request:trailers").subscribe((evt) => {
         const {
-          request: { method, path: path9, origin }
+          request: { method, path: path10, origin }
         } = evt;
-        debuglog("trailers received from %s %s/%s", method, origin, path9);
+        debuglog("trailers received from %s %s/%s", method, origin, path10);
       });
       diagnosticsChannel.channel("undici:request:error").subscribe((evt) => {
         const {
-          request: { method, path: path9, origin },
+          request: { method, path: path10, origin },
           error
         } = evt;
         debuglog(
           "request to %s %s/%s errored - %s",
           method,
           origin,
-          path9,
+          path10,
           error.message
         );
       });
@@ -1602,9 +1602,9 @@ var require_diagnostics = __commonJS({
         });
         diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
           const {
-            request: { method, path: path9, origin }
+            request: { method, path: path10, origin }
           } = evt;
-          debuglog("sending request to %s %s/%s", method, origin, path9);
+          debuglog("sending request to %s %s/%s", method, origin, path10);
         });
       }
       diagnosticsChannel.channel("undici:websocket:open").subscribe((evt) => {
@@ -1667,7 +1667,7 @@ var require_request = __commonJS({
     var kHandler = /* @__PURE__ */ Symbol("handler");
     var Request = class {
       constructor(origin, {
-        path: path9,
+        path: path10,
         method,
         body,
         headers,
@@ -1682,11 +1682,11 @@ var require_request = __commonJS({
         expectContinue,
         servername
       }, handler) {
-        if (typeof path9 !== "string") {
+        if (typeof path10 !== "string") {
           throw new InvalidArgumentError("path must be a string");
-        } else if (path9[0] !== "/" && !(path9.startsWith("http://") || path9.startsWith("https://")) && method !== "CONNECT") {
+        } else if (path10[0] !== "/" && !(path10.startsWith("http://") || path10.startsWith("https://")) && method !== "CONNECT") {
           throw new InvalidArgumentError("path must be an absolute URL or start with a slash");
-        } else if (invalidPathRegex.test(path9)) {
+        } else if (invalidPathRegex.test(path10)) {
           throw new InvalidArgumentError("invalid request path");
         }
         if (typeof method !== "string") {
@@ -1752,7 +1752,7 @@ var require_request = __commonJS({
         this.completed = false;
         this.aborted = false;
         this.upgrade = upgrade || null;
-        this.path = query ? buildURL(path9, query) : path9;
+        this.path = query ? buildURL(path10, query) : path10;
         this.origin = origin;
         this.idempotent = idempotent == null ? method === "HEAD" || method === "GET" : idempotent;
         this.blocking = blocking == null ? false : blocking;
@@ -6278,7 +6278,7 @@ var require_client_h1 = __commonJS({
       return method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && method !== "TRACE" && method !== "CONNECT";
     }
     function writeH1(client, request) {
-      const { method, path: path9, host, upgrade, blocking, reset } = request;
+      const { method, path: path10, host, upgrade, blocking, reset } = request;
       let { body, headers, contentLength } = request;
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH" || method === "QUERY" || method === "PROPFIND" || method === "PROPPATCH";
       if (util2.isFormDataLike(body)) {
@@ -6344,7 +6344,7 @@ var require_client_h1 = __commonJS({
       if (blocking) {
         socket[kBlocking] = true;
       }
-      let header = `${method} ${path9} HTTP/1.1\r
+      let header = `${method} ${path10} HTTP/1.1\r
 `;
       if (typeof host === "string") {
         header += `host: ${host}\r
@@ -6870,7 +6870,7 @@ var require_client_h2 = __commonJS({
     }
     function writeH2(client, request) {
       const session = client[kHTTP2Session];
-      const { method, path: path9, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
+      const { method, path: path10, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
       let { body } = request;
       if (upgrade) {
         util2.errorRequest(client, request, new Error("Upgrade not supported for H2"));
@@ -6937,7 +6937,7 @@ var require_client_h2 = __commonJS({
         });
         return true;
       }
-      headers[HTTP2_HEADER_PATH] = path9;
+      headers[HTTP2_HEADER_PATH] = path10;
       headers[HTTP2_HEADER_SCHEME] = "https";
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body && typeof body.read === "function") {
@@ -7290,9 +7290,9 @@ var require_redirect_handler = __commonJS({
           return this.handler.onHeaders(statusCode, headers, resume, statusText);
         }
         const { origin, pathname, search } = util2.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
-        const path9 = search ? `${pathname}${search}` : pathname;
+        const path10 = search ? `${pathname}${search}` : pathname;
         this.opts.headers = cleanRequestHeaders(this.opts.headers, statusCode === 303, this.opts.origin !== origin);
-        this.opts.path = path9;
+        this.opts.path = path10;
         this.opts.origin = origin;
         this.opts.maxRedirections = 0;
         this.opts.query = null;
@@ -8527,10 +8527,10 @@ var require_proxy_agent = __commonJS({
         };
         const {
           origin,
-          path: path9 = "/",
+          path: path10 = "/",
           headers = {}
         } = opts;
-        opts.path = origin + path9;
+        opts.path = origin + path10;
         if (!("host" in headers) && !("Host" in headers)) {
           const { host } = new URL2(origin);
           headers.host = host;
@@ -10451,20 +10451,20 @@ var require_mock_utils = __commonJS({
       }
       return true;
     }
-    function safeUrl(path9) {
-      if (typeof path9 !== "string") {
-        return path9;
+    function safeUrl(path10) {
+      if (typeof path10 !== "string") {
+        return path10;
       }
-      const pathSegments = path9.split("?");
+      const pathSegments = path10.split("?");
       if (pathSegments.length !== 2) {
-        return path9;
+        return path10;
       }
       const qp = new URLSearchParams(pathSegments.pop());
       qp.sort();
       return [...pathSegments, qp.toString()].join("?");
     }
-    function matchKey(mockDispatch2, { path: path9, method, body, headers }) {
-      const pathMatch = matchValue(mockDispatch2.path, path9);
+    function matchKey(mockDispatch2, { path: path10, method, body, headers }) {
+      const pathMatch = matchValue(mockDispatch2.path, path10);
       const methodMatch = matchValue(mockDispatch2.method, method);
       const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body) : true;
       const headersMatch = matchHeaders(mockDispatch2, headers);
@@ -10486,7 +10486,7 @@ var require_mock_utils = __commonJS({
     function getMockDispatch(mockDispatches, key) {
       const basePath = key.query ? buildURL(key.path, key.query) : key.path;
       const resolvedPath = typeof basePath === "string" ? safeUrl(basePath) : basePath;
-      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path9 }) => matchValue(safeUrl(path9), resolvedPath));
+      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path10 }) => matchValue(safeUrl(path10), resolvedPath));
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for path '${resolvedPath}'`);
       }
@@ -10524,9 +10524,9 @@ var require_mock_utils = __commonJS({
       }
     }
     function buildKey(opts) {
-      const { path: path9, method, body, headers, query } = opts;
+      const { path: path10, method, body, headers, query } = opts;
       return {
-        path: path9,
+        path: path10,
         method,
         body,
         headers,
@@ -10989,10 +10989,10 @@ var require_pending_interceptors_formatter = __commonJS({
       }
       format(pendingInterceptors) {
         const withPrettyHeaders = pendingInterceptors.map(
-          ({ method, path: path9, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
+          ({ method, path: path10, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
             Method: method,
             Origin: origin,
-            Path: path9,
+            Path: path10,
             "Status code": statusCode,
             Persistent: persist ? PERSISTENT : NOT_PERSISTENT,
             Invocations: timesInvoked,
@@ -15873,9 +15873,9 @@ var require_util6 = __commonJS({
         }
       }
     }
-    function validateCookiePath(path9) {
-      for (let i = 0; i < path9.length; ++i) {
-        const code = path9.charCodeAt(i);
+    function validateCookiePath(path10) {
+      for (let i = 0; i < path10.length; ++i) {
+        const code = path10.charCodeAt(i);
         if (code < 32 || // exclude CTLs (0-31)
         code === 127 || // DEL
         code === 59) {
@@ -18552,11 +18552,11 @@ var require_undici = __commonJS({
           if (typeof opts.path !== "string") {
             throw new InvalidArgumentError("invalid opts.path");
           }
-          let path9 = opts.path;
+          let path10 = opts.path;
           if (!opts.path.startsWith("/")) {
-            path9 = `/${path9}`;
+            path10 = `/${path10}`;
           }
-          url = new URL(util2.parseOrigin(url).origin + path9);
+          url = new URL(util2.parseOrigin(url).origin + path10);
         } else {
           if (!opts) {
             opts = typeof url === "object" ? url : {};
@@ -20558,10 +20558,10 @@ var require_semver2 = __commonJS({
 });
 
 // src/action-core.js
-var import_promises3 = require("node:fs/promises");
-var import_node_os2 = __toESM(require("node:os"), 1);
-var import_node_path3 = __toESM(require("node:path"), 1);
-var import_node_process3 = __toESM(require("node:process"), 1);
+var import_promises4 = require("node:fs/promises");
+var import_node_os3 = __toESM(require("node:os"), 1);
+var import_node_path4 = __toESM(require("node:path"), 1);
+var import_node_process4 = __toESM(require("node:process"), 1);
 
 // node_modules/@actions/core/lib/command.js
 var os = __toESM(require("os"), 1);
@@ -22910,12 +22910,12 @@ function writeOutput(name, value, env) {
 var import_node_crypto2 = require("node:crypto");
 var import_node_child_process = require("node:child_process");
 var import_node_fs3 = require("node:fs");
-var import_promises2 = require("node:fs/promises");
+var import_promises3 = require("node:fs/promises");
 var import_node_http = __toESM(require("node:http"), 1);
 var import_node_https = __toESM(require("node:https"), 1);
-var import_node_os = __toESM(require("node:os"), 1);
-var import_node_path2 = __toESM(require("node:path"), 1);
-var import_node_process2 = __toESM(require("node:process"), 1);
+var import_node_os2 = __toESM(require("node:os"), 1);
+var import_node_path3 = __toESM(require("node:path"), 1);
+var import_node_process3 = __toESM(require("node:process"), 1);
 
 // src/chunks.js
 var import_node_crypto = require("node:crypto");
@@ -23072,13 +23072,60 @@ async function walk(root) {
   return items;
 }
 
+// src/credentials.js
+var import_promises2 = require("node:fs/promises");
+var import_node_os = __toESM(require("node:os"), 1);
+var import_node_path2 = __toESM(require("node:path"), 1);
+var import_node_process2 = __toESM(require("node:process"), 1);
+var CREDENTIALS_FILE = "credentials.json";
+function credentialsDirectory(env = import_node_process2.default.env, platform2 = import_node_process2.default.platform) {
+  const paths = platform2 === "win32" ? import_node_path2.default.win32 : import_node_path2.default.posix;
+  if (env.TESTING_FLOOR_CONFIG_DIR) {
+    return paths.resolve(env.TESTING_FLOOR_CONFIG_DIR);
+  }
+  if (platform2 === "win32") {
+    return paths.join(env.APPDATA || paths.join(import_node_os.default.homedir(), "AppData", "Roaming"), "testingfloor");
+  }
+  return paths.join(env.XDG_CONFIG_HOME || paths.join(import_node_os.default.homedir(), ".config"), "testingfloor");
+}
+function credentialsPath(env = import_node_process2.default.env, platform2 = import_node_process2.default.platform) {
+  const paths = platform2 === "win32" ? import_node_path2.default.win32 : import_node_path2.default.posix;
+  return paths.join(credentialsDirectory(env, platform2), CREDENTIALS_FILE);
+}
+async function readSavedLogin(env = import_node_process2.default.env) {
+  const file = credentialsPath(env);
+  let raw;
+  try {
+    raw = await (0, import_promises2.readFile)(file, "utf8");
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return null;
+    }
+    throw new Error(`Couldn't read the saved login at ${file}: ${error.message}`);
+  }
+  let saved;
+  try {
+    saved = JSON.parse(raw);
+  } catch {
+    saved = null;
+  }
+  if (typeof saved?.token !== "string" || typeof saved?.apiUrl !== "string") {
+    throw new Error(`The saved login at ${file} is damaged. Run "testingfloor logout", then "testingfloor login".`);
+  }
+  return saved;
+}
+
+// src/login.js
+var MAX_WAIT_MS = 15 * 60 * 1e3;
+var REQUEST_TIMEOUT_MS = 30 * 1e3;
+
 // src/cli.js
 var DEFAULT_API_URL = "https://api.testingfloor.com";
 var PLATFORMS = /* @__PURE__ */ new Set(["windows", "macos", "linux"]);
-async function resolveUploadPlan(options, env = {}, cwd = import_node_process2.default.cwd()) {
-  const configPath = options.config ? import_node_path2.default.resolve(cwd, options.config) : null;
+async function resolveUploadPlan(options, env = {}, cwd = import_node_process3.default.cwd()) {
+  const configPath = options.config ? import_node_path3.default.resolve(cwd, options.config) : null;
   const config = configPath ? await readJson(configPath) : {};
-  const configDir = configPath ? import_node_path2.default.dirname(configPath) : cwd;
+  const configDir = configPath ? import_node_path3.default.dirname(configPath) : cwd;
   const cliBuildRequested = Boolean(options.platform || options.archive || options.launchPath);
   const configuredBuilds = normalizeConfiguredBuilds(config);
   if (cliBuildRequested && configuredBuilds.length > 0) {
@@ -23087,7 +23134,7 @@ async function resolveUploadPlan(options, env = {}, cwd = import_node_process2.d
   const apiUrl = normalizeApiUrl(
     firstPresent(options.apiUrl, env.TESTING_FLOOR_API_URL, config.apiUrl, DEFAULT_API_URL)
   );
-  const token = firstPresent(options.token, env.TESTING_FLOOR_API_TOKEN, config.token);
+  const token = await resolveToken({ options, env, config, apiUrl });
   const organizationId = firstPresent(
     options.organizationId,
     env.TESTING_FLOOR_ORGANIZATION_ID,
@@ -23122,7 +23169,7 @@ async function resolveUploadPlan(options, env = {}, cwd = import_node_process2.d
       commonBranch: branch
     })
   );
-  validatePlan({ apiUrl, token, organizationId, gameId, builds });
+  validatePlan({ organizationId, gameId, builds });
   return {
     apiUrl,
     butlerPath,
@@ -23157,15 +23204,15 @@ function parseSourceRefEntries(entries) {
 }
 async function uploadBuild(plan, build, { log = console.error, pollIntervalMs, retryDelaysMs = REQUEST_RETRY_DELAYS_MS } = {}) {
   const source = await pathInfo(build.buildDirectory, { allowDirectory: true, label: "Build directory" });
-  if (!(await (0, import_promises2.stat)(build.buildDirectory)).isDirectory()) {
+  if (!(await (0, import_promises3.stat)(build.buildDirectory)).isDirectory()) {
     throw new Error(`Build directory must be a folder, not a file: ${build.buildDirectory}`);
   }
   log(`Creating ${build.platform} wharf patch from ${build.buildDirectory}`);
-  const tempDir = await (0, import_promises2.mkdtemp)(import_node_path2.default.join(import_node_os.default.tmpdir(), "testingfloor-wharf-"));
+  const tempDir = await (0, import_promises3.mkdtemp)(import_node_path3.default.join(import_node_os2.default.tmpdir(), "testingfloor-wharf-"));
   try {
     const base = await fetchWharfBase(plan, build, { retryDelaysMs });
     const targetSignaturePath = base.signatureUrl ? await downloadBaseSignature(base.signatureUrl, tempDir) : "/dev/null";
-    const patchPath = import_node_path2.default.join(tempDir, "patch.pwr");
+    const patchPath = import_node_path3.default.join(tempDir, "patch.pwr");
     const signaturePath = `${patchPath}.sig`;
     await runButlerDiff({
       butlerPath: plan.butlerPath ?? "butler",
@@ -23242,7 +23289,7 @@ async function uploadBuild(plan, build, { log = console.error, pollIntervalMs, r
       zipSizeBytes: manifest?.zip_size_bytes ?? null
     };
   } finally {
-    await (0, import_promises2.rm)(tempDir, { force: true, recursive: true });
+    await (0, import_promises3.rm)(tempDir, { force: true, recursive: true });
   }
 }
 async function fetchWharfBase(plan, build, { retryDelaysMs }) {
@@ -23367,8 +23414,8 @@ async function downloadBaseSignature(signatureUrl, tempDir) {
   if (!response.ok) {
     throw new Error(`Base signature download failed with ${response.status}: ${await response.text()}`);
   }
-  const signaturePath = import_node_path2.default.join(tempDir, "base.pwr.sig");
-  await (0, import_promises2.writeFile)(signaturePath, Buffer.from(await response.arrayBuffer()));
+  const signaturePath = import_node_path3.default.join(tempDir, "base.pwr.sig");
+  await (0, import_promises3.writeFile)(signaturePath, Buffer.from(await response.arrayBuffer()));
   return signaturePath;
 }
 function runButlerDiff({ butlerPath, target, source, patchPath }) {
@@ -23405,7 +23452,7 @@ async function uploadArtifact(uploadSpec, filePath, size, { label, log }) {
   return null;
 }
 async function readJson(filePath) {
-  const raw = await (0, import_promises2.readFile)(filePath, "utf8");
+  const raw = await (0, import_promises3.readFile)(filePath, "utf8");
   try {
     return JSON.parse(raw);
   } catch (error) {
@@ -23448,8 +23495,8 @@ function defaultBuildFilename(directory) {
   if (!directory) {
     return null;
   }
-  const name = import_node_path2.default.basename(directory);
-  return import_node_path2.default.extname(name).toLowerCase() === ".zip" ? name : `${name}.zip`;
+  const name = import_node_path3.default.basename(directory);
+  return import_node_path3.default.extname(name).toLowerCase() === ".zip" ? name : `${name}.zip`;
 }
 function normalizeLaunchArgs(value) {
   if (value === void 0 || value === null) {
@@ -23461,9 +23508,6 @@ function normalizeLaunchArgs(value) {
   return value.map(String);
 }
 function validatePlan(plan) {
-  if (!plan.token) {
-    throw new Error("Missing API token. Set TESTING_FLOOR_API_TOKEN or pass --token.");
-  }
   if (!plan.organizationId) {
     throw new Error(
       "Missing organization id. Set organizationId in config, TESTING_FLOOR_ORGANIZATION_ID, or pass --organization-id."
@@ -23496,8 +23540,8 @@ async function fileInfo(filePath) {
 async function pathInfo(filePath, { allowDirectory, label }) {
   let stats;
   try {
-    await (0, import_promises2.access)(filePath);
-    stats = await (0, import_promises2.stat)(filePath);
+    await (0, import_promises3.access)(filePath);
+    stats = await (0, import_promises3.stat)(filePath);
   } catch {
     throw new Error(`${label} not found: ${filePath}`);
   }
@@ -23521,10 +23565,10 @@ async function pathInfo(filePath, { allowDirectory, label }) {
 }
 async function directorySize(dir) {
   let total = 0;
-  const handle = await (0, import_promises2.opendir)(dir);
+  const handle = await (0, import_promises3.opendir)(dir);
   for await (const entry of handle) {
-    const fullPath = import_node_path2.default.join(dir, entry.name);
-    const entryStats = await (0, import_promises2.stat)(fullPath);
+    const fullPath = import_node_path3.default.join(dir, entry.name);
+    const entryStats = await (0, import_promises3.stat)(fullPath);
     if (entryStats.isDirectory()) {
       total += await directorySize(fullPath);
     } else if (entryStats.isFile()) {
@@ -23726,7 +23770,23 @@ function objectValue(value, name) {
   return value;
 }
 function resolveBuildPath(filePath, baseDir) {
-  return import_node_path2.default.isAbsolute(filePath) ? filePath : import_node_path2.default.resolve(baseDir, filePath);
+  return import_node_path3.default.isAbsolute(filePath) ? filePath : import_node_path3.default.resolve(baseDir, filePath);
+}
+async function resolveToken({ options, env, config, apiUrl }) {
+  const token = firstPresent(options.token, env.TESTING_FLOOR_API_TOKEN, config.token);
+  if (token) {
+    return token;
+  }
+  const saved = await readSavedLogin(env);
+  if (saved?.apiUrl === apiUrl) {
+    return saved.token;
+  }
+  if (saved) {
+    throw new Error(
+      `Missing API token for ${apiUrl}. You're signed in to ${saved.apiUrl}; run "testingfloor login --api-url ${apiUrl}" to sign in there, set TESTING_FLOOR_API_TOKEN, or pass --token.`
+    );
+  }
+  throw new Error('Missing API token. Run "testingfloor login", set TESTING_FLOOR_API_TOKEN, or pass --token.');
 }
 function normalizeApiUrl(raw) {
   const url = new URL(raw);
@@ -23755,7 +23815,7 @@ function formatBytes(bytes) {
 
 // src/action-core.js
 var BUTLER_TOOL_NAME = "butler";
-async function runAction(env = import_node_process3.default.env, cwd = import_node_process3.default.cwd()) {
+async function runAction(env = import_node_process4.default.env, cwd = import_node_process4.default.cwd()) {
   const inputs = readInputs(env);
   const build = resolveActionBuild(inputs, cwd, env);
   const butlerPath = await resolveActionButlerPath({
@@ -23817,7 +23877,7 @@ function readInputs(env) {
 async function resolveActionButlerPath({
   butlerPath,
   butlerVersion = "LATEST",
-  env = import_node_process3.default.env,
+  env = import_node_process4.default.env,
   setup = setupButler
 } = {}) {
   if (butlerPath) {
@@ -23839,21 +23899,21 @@ async function setupButler({ version = "LATEST", log = console.error } = {}) {
     log(`Installing butler ${version} for wharf upload`);
     const downloadPath = await downloadTool(butlerDownloadUrl({ version }));
     const extractedDir = await extractZip(downloadPath);
-    const extractedBinary = import_node_path3.default.join(extractedDir, binaryName);
-    await (0, import_promises3.chmod)(extractedBinary, 493).catch(() => {
+    const extractedBinary = import_node_path4.default.join(extractedDir, binaryName);
+    await (0, import_promises4.chmod)(extractedBinary, 493).catch(() => {
     });
     toolDir = cacheable ? await cacheFile(extractedBinary, binaryName, BUTLER_TOOL_NAME, version) : extractedDir;
   }
   addPath(toolDir);
-  return import_node_path3.default.join(toolDir, binaryName);
+  return import_node_path4.default.join(toolDir, binaryName);
 }
-function butlerDownloadUrl({ platform: platform2 = import_node_os2.default.platform(), arch: arch3 = import_node_os2.default.arch(), version = "LATEST" } = {}) {
+function butlerDownloadUrl({ platform: platform2 = import_node_os3.default.platform(), arch: arch3 = import_node_os3.default.arch(), version = "LATEST" } = {}) {
   return `https://broth.itch.zone/butler/${butlerPlatform(platform2)}-${butlerArch(arch3, platform2)}/${version}/archive/default`;
 }
-function butlerBinaryName(platform2 = import_node_os2.default.platform()) {
+function butlerBinaryName(platform2 = import_node_os3.default.platform()) {
   return platform2 === "win32" ? "butler.exe" : "butler";
 }
-function butlerPlatform(platform2 = import_node_os2.default.platform()) {
+function butlerPlatform(platform2 = import_node_os3.default.platform()) {
   if (platform2 === "win32") {
     return "windows";
   }
@@ -23862,7 +23922,7 @@ function butlerPlatform(platform2 = import_node_os2.default.platform()) {
   }
   throw new Error(`Unsupported butler platform: ${platform2}`);
 }
-function butlerArch(arch3 = import_node_os2.default.arch(), platform2 = import_node_os2.default.platform()) {
+function butlerArch(arch3 = import_node_os3.default.arch(), platform2 = import_node_os3.default.platform()) {
   if (arch3 === "x64") {
     return "amd64";
   }
@@ -23877,12 +23937,12 @@ function butlerArch(arch3 = import_node_os2.default.arch(), platform2 = import_n
 function isCacheableButlerVersion(version) {
   return /^\d+\.\d+\.\d+/.test(version);
 }
-function resolveActionBuild(inputs, cwd = import_node_process3.default.cwd(), env = import_node_process3.default.env) {
+function resolveActionBuild(inputs, cwd = import_node_process4.default.cwd(), env = import_node_process4.default.env) {
   if (!inputs.buildDirectory) {
     throw new Error("Set build-directory.");
   }
   return {
-    buildDirectory: import_node_path3.default.resolve(cwd, inputs.buildDirectory),
+    buildDirectory: import_node_path4.default.resolve(cwd, inputs.buildDirectory),
     filename: inputs.filename || defaultArchiveName({ env, inputs }),
     launchArgs: inputs.launchArgs,
     launchPath: inputs.launchPath,

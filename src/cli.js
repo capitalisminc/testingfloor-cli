@@ -9,6 +9,8 @@ import path from "node:path";
 import process from "node:process";
 
 import { chunkBuildDirectory, readObject } from "./chunks.js";
+import { readSavedLogin } from "./credentials.js";
+import { login, logout, whoami } from "./login.js";
 
 const DEFAULT_API_URL = "https://api.testingfloor.com";
 const PLATFORMS = new Set(["windows", "macos", "linux"]);
@@ -54,11 +56,28 @@ const REMOVED_OPTIONS = {
   "archive-kind": "--archive-kind was removed. Uploads always send the build directory as chunks for zip downloads, plus a wharf patch for the recorder."
 };
 
-export async function main(argv = process.argv.slice(2), env = process.env, cwd = process.cwd()) {
+// deps lets bin/ pass the package version and tests swap out the browser,
+// clock and output.
+export async function main(argv = process.argv.slice(2), env = process.env, cwd = process.cwd(), deps = {}) {
   const parsed = parseArgs(argv);
 
   if (parsed.help || parsed.command === "help" || !parsed.command) {
     process.stdout.write(helpText());
+    return;
+  }
+
+  if (parsed.command === "login") {
+    await login({ ...deps, apiUrl: resolveApiUrl(parsed.options, env), env, noBrowser: parsed.options.noBrowser });
+    return;
+  }
+
+  if (parsed.command === "logout") {
+    await logout({ env, print: deps.print });
+    return;
+  }
+
+  if (parsed.command === "whoami") {
+    await whoami({ apiUrl: resolveApiUrl(parsed.options, env), env, print: deps.print });
     return;
   }
 
@@ -99,14 +118,14 @@ export async function main(argv = process.argv.slice(2), env = process.env, cwd 
 
 export async function resolveTelemetryPlan(options, env = {}, cwd = process.cwd()) {
   const config = options.config ? await readJson(path.resolve(cwd, options.config)) : {};
+  const apiUrl = normalizeApiUrl(firstPresent(options.apiUrl, env.TESTING_FLOOR_API_URL, config.apiUrl, DEFAULT_API_URL));
   const plan = {
-    apiUrl: normalizeApiUrl(firstPresent(options.apiUrl, env.TESTING_FLOOR_API_URL, config.apiUrl, DEFAULT_API_URL)),
-    token: firstPresent(options.token, env.TESTING_FLOOR_API_TOKEN, config.token),
+    apiUrl,
+    token: await resolveToken({ options, env, config, apiUrl }),
     organizationId: firstPresent(options.organizationId, env.TESTING_FLOOR_ORGANIZATION_ID, config.organizationId),
     gameId: firstPresent(options.gameId, env.TESTING_FLOOR_GAME_ID, config.gameId),
     mode: options.mode ?? "merge"
   };
-  if (!plan.token) throw new Error("Missing API token. Set TESTING_FLOOR_API_TOKEN or pass --token.");
   if (!plan.organizationId) throw new Error("Missing organization id. Pass --organization-id or set TESTING_FLOOR_ORGANIZATION_ID.");
   if (!plan.gameId || !/^[A-Za-z0-9_-]+$/.test(String(plan.gameId))) throw new Error("Missing or invalid game id. Pass --game-id or set TESTING_FLOOR_GAME_ID.");
   if (!["merge", "replace"].includes(plan.mode)) throw new Error("--mode must be merge or replace.");
@@ -145,6 +164,11 @@ export function parseArgs(argv) {
 
     if (raw === "--json") {
       result.options.json = true;
+      continue;
+    }
+
+    if (raw === "--no-browser") {
+      result.options.noBrowser = true;
       continue;
     }
 
@@ -194,7 +218,7 @@ export async function resolveUploadPlan(options, env = {}, cwd = process.cwd()) 
   const apiUrl = normalizeApiUrl(
     firstPresent(options.apiUrl, env.TESTING_FLOOR_API_URL, config.apiUrl, DEFAULT_API_URL)
   );
-  const token = firstPresent(options.token, env.TESTING_FLOOR_API_TOKEN, config.token);
+  const token = await resolveToken({ options, env, config, apiUrl });
   const organizationId = firstPresent(
     options.organizationId,
     env.TESTING_FLOOR_ORGANIZATION_ID,
@@ -231,7 +255,7 @@ export async function resolveUploadPlan(options, env = {}, cwd = process.cwd()) 
     })
   );
 
-  validatePlan({ apiUrl, token, organizationId, gameId, builds });
+  validatePlan({ organizationId, gameId, builds });
 
   return {
     apiUrl,
@@ -266,7 +290,7 @@ export async function resolveMapPlan(options, env = {}, cwd = process.cwd()) {
   const apiUrl = normalizeApiUrl(
     firstPresent(options.apiUrl, env.TESTING_FLOOR_API_URL, config.apiUrl, DEFAULT_API_URL)
   );
-  const token = firstPresent(options.token, env.TESTING_FLOOR_API_TOKEN, config.token);
+  const token = await resolveToken({ options, env, config, apiUrl });
   const organizationId = firstPresent(
     options.organizationId,
     env.TESTING_FLOOR_ORGANIZATION_ID,
@@ -292,7 +316,7 @@ export async function resolveMapPlan(options, env = {}, cwd = process.cwd()) {
     normalizeMap(map, { configDir, cwd, commonAppVersion: appVersion, commonMapVersion: mapVersion })
   );
 
-  validateMapPlan({ apiUrl, token, organizationId, gameId, maps });
+  validateMapPlan({ organizationId, gameId, maps });
 
   return {
     apiUrl,
@@ -427,10 +451,6 @@ function normalizeMap(map, { configDir, cwd, commonAppVersion, commonMapVersion 
 }
 
 function validateMapPlan(plan) {
-  if (!plan.token) {
-    throw new Error("Missing API token. Set TESTING_FLOOR_API_TOKEN or pass --token.");
-  }
-
   if (!plan.organizationId) {
     throw new Error(
       "Missing organization id. Set organizationId in config, TESTING_FLOOR_ORGANIZATION_ID, or pass --organization-id."
@@ -934,10 +954,6 @@ function normalizeLaunchArgs(value) {
 }
 
 function validatePlan(plan) {
-  if (!plan.token) {
-    throw new Error("Missing API token. Set TESTING_FLOOR_API_TOKEN or pass --token.");
-  }
-
   if (!plan.organizationId) {
     throw new Error(
       "Missing organization id. Set organizationId in config, TESTING_FLOOR_ORGANIZATION_ID, or pass --organization-id."
@@ -1260,6 +1276,32 @@ function resolveBuildPath(filePath, baseDir) {
   return path.isAbsolute(filePath) ? filePath : path.resolve(baseDir, filePath);
 }
 
+// The first token found: --token, TESTING_FLOOR_API_TOKEN, the config file,
+// then the saved login. A saved login is only sent to the API URL that issued
+// it, and the file is only read when nothing else supplies a token.
+async function resolveToken({ options, env, config, apiUrl }) {
+  const token = firstPresent(options.token, env.TESTING_FLOOR_API_TOKEN, config.token);
+  if (token) {
+    return token;
+  }
+
+  const saved = await readSavedLogin(env);
+  if (saved?.apiUrl === apiUrl) {
+    return saved.token;
+  }
+
+  if (saved) {
+    throw new Error(
+      `Missing API token for ${apiUrl}. You're signed in to ${saved.apiUrl}; run "testingfloor login --api-url ${apiUrl}" to sign in there, set TESTING_FLOOR_API_TOKEN, or pass --token.`
+    );
+  }
+  throw new Error('Missing API token. Run "testingfloor login", set TESTING_FLOOR_API_TOKEN, or pass --token.');
+}
+
+function resolveApiUrl(options, env) {
+  return normalizeApiUrl(firstPresent(options.apiUrl, env.TESTING_FLOOR_API_URL, DEFAULT_API_URL));
+}
+
 function normalizeApiUrl(raw) {
   const url = new URL(raw);
   url.pathname = url.pathname.replace(/\/+$/, "");
@@ -1307,6 +1349,9 @@ function helpText() {
   return `Testing Floor CLI
 
 Usage:
+  testingfloor login
+  testingfloor whoami
+  testingfloor logout
   testingfloor upload-build --organization-id gamedepartment --game-id 42 --platform windows --build-directory ./Builds/Windows --version 0.4.12 --launch-path Game.exe
   testingfloor upload-build --config testingfloor-builds.json
   testingfloor upload-map --organization-id gamedepartment --game-id 42 --level-id factory --image ./maps/factory.png --bounds 0,0,200,200
@@ -1314,9 +1359,20 @@ Usage:
   testingfloor get-telemetry-schema --organization-id example-studio --game-id my-game
   testingfloor set-telemetry-schema --organization-id example-studio --game-id my-game --schema telemetry-schema.json
 
+Sign in:
+  login                     Approve this computer in your browser and save its token
+  whoami                    Show who is signed in, and for which API URL
+  logout                    Delete the saved token from this computer
+  --no-browser              Print the approval link without opening a browser (login)
+
+  Commands use the first token they find: --token, TESTING_FLOOR_API_TOKEN,
+  the config file's token, then the saved login. In CI, use an API token.
+
 Environment:
   TESTING_FLOOR_API_TOKEN       API key (builds:create, maps:sync, or telemetry:configure scope)
   TESTING_FLOOR_API_URL         Defaults to ${DEFAULT_API_URL}
+  TESTING_FLOOR_CONFIG_DIR      Folder for the saved login, defaults to ~/.config/testingfloor
+                                ($XDG_CONFIG_HOME/testingfloor, or %APPDATA%\\testingfloor on Windows)
   TESTING_FLOOR_ORGANIZATION_ID Organization slug or numeric id
   TESTING_FLOOR_GAME_ID         Numeric game id
   TESTING_FLOOR_VERSION         Build version / map app_version metadata

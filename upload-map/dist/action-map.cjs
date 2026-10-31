@@ -22,7 +22,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 
 // src/action-map.js
-var import_node_process3 = __toESM(require("node:process"), 1);
+var import_node_process4 = __toESM(require("node:process"), 1);
 
 // src/action-io.js
 var import_node_fs = require("node:fs");
@@ -56,11 +56,11 @@ function writeOutput(name, value, env) {
 // src/cli.js
 var import_node_crypto = require("node:crypto");
 var import_node_fs2 = require("node:fs");
-var import_promises = require("node:fs/promises");
+var import_promises2 = require("node:fs/promises");
 var import_node_http = __toESM(require("node:http"), 1);
 var import_node_https = __toESM(require("node:https"), 1);
-var import_node_path = __toESM(require("node:path"), 1);
-var import_node_process2 = __toESM(require("node:process"), 1);
+var import_node_path2 = __toESM(require("node:path"), 1);
+var import_node_process3 = __toESM(require("node:process"), 1);
 
 // src/chunks.js
 var CHUNKING = Object.freeze({
@@ -84,6 +84,53 @@ var GEAR = (() => {
   return table;
 })();
 
+// src/credentials.js
+var import_promises = require("node:fs/promises");
+var import_node_os = __toESM(require("node:os"), 1);
+var import_node_path = __toESM(require("node:path"), 1);
+var import_node_process2 = __toESM(require("node:process"), 1);
+var CREDENTIALS_FILE = "credentials.json";
+function credentialsDirectory(env = import_node_process2.default.env, platform = import_node_process2.default.platform) {
+  const paths = platform === "win32" ? import_node_path.default.win32 : import_node_path.default.posix;
+  if (env.TESTING_FLOOR_CONFIG_DIR) {
+    return paths.resolve(env.TESTING_FLOOR_CONFIG_DIR);
+  }
+  if (platform === "win32") {
+    return paths.join(env.APPDATA || paths.join(import_node_os.default.homedir(), "AppData", "Roaming"), "testingfloor");
+  }
+  return paths.join(env.XDG_CONFIG_HOME || paths.join(import_node_os.default.homedir(), ".config"), "testingfloor");
+}
+function credentialsPath(env = import_node_process2.default.env, platform = import_node_process2.default.platform) {
+  const paths = platform === "win32" ? import_node_path.default.win32 : import_node_path.default.posix;
+  return paths.join(credentialsDirectory(env, platform), CREDENTIALS_FILE);
+}
+async function readSavedLogin(env = import_node_process2.default.env) {
+  const file = credentialsPath(env);
+  let raw;
+  try {
+    raw = await (0, import_promises.readFile)(file, "utf8");
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return null;
+    }
+    throw new Error(`Couldn't read the saved login at ${file}: ${error.message}`);
+  }
+  let saved;
+  try {
+    saved = JSON.parse(raw);
+  } catch {
+    saved = null;
+  }
+  if (typeof saved?.token !== "string" || typeof saved?.apiUrl !== "string") {
+    throw new Error(`The saved login at ${file} is damaged. Run "testingfloor logout", then "testingfloor login".`);
+  }
+  return saved;
+}
+
+// src/login.js
+var MAX_WAIT_MS = 15 * 60 * 1e3;
+var REQUEST_TIMEOUT_MS = 30 * 1e3;
+
 // src/cli.js
 var DEFAULT_API_URL = "https://api.testingfloor.com";
 var AXES = /* @__PURE__ */ new Set(["x", "y", "z"]);
@@ -93,10 +140,10 @@ var IMAGE_MIME_TYPES = {
   ".jpeg": "image/jpeg",
   ".webp": "image/webp"
 };
-async function resolveMapPlan(options, env = {}, cwd = import_node_process2.default.cwd()) {
-  const configPath = options.config ? import_node_path.default.resolve(cwd, options.config) : null;
+async function resolveMapPlan(options, env = {}, cwd = import_node_process3.default.cwd()) {
+  const configPath = options.config ? import_node_path2.default.resolve(cwd, options.config) : null;
   const config = configPath ? await readJson(configPath) : {};
-  const configDir = configPath ? import_node_path.default.dirname(configPath) : cwd;
+  const configDir = configPath ? import_node_path2.default.dirname(configPath) : cwd;
   const cliMapRequested = Boolean(
     options.levelId || options.image || options.bounds || options.horizontalAxis || options.verticalAxis || options.variant || options.variantKey || options.defaultVariant
   );
@@ -107,7 +154,7 @@ async function resolveMapPlan(options, env = {}, cwd = import_node_process2.defa
   const apiUrl = normalizeApiUrl(
     firstPresent(options.apiUrl, env.TESTING_FLOOR_API_URL, config.apiUrl, DEFAULT_API_URL)
   );
-  const token = firstPresent(options.token, env.TESTING_FLOOR_API_TOKEN, config.token);
+  const token = await resolveToken({ options, env, config, apiUrl });
   const organizationId = firstPresent(
     options.organizationId,
     env.TESTING_FLOOR_ORGANIZATION_ID,
@@ -131,7 +178,7 @@ async function resolveMapPlan(options, env = {}, cwd = import_node_process2.defa
   const maps = rawMaps.map(
     (map) => normalizeMap(map, { configDir, cwd, commonAppVersion: appVersion, commonMapVersion: mapVersion })
   );
-  validateMapPlan({ apiUrl, token, organizationId, gameId, maps });
+  validateMapPlan({ organizationId, gameId, maps });
   return {
     apiUrl,
     token,
@@ -232,7 +279,7 @@ function normalizeMap(map, { configDir, cwd, commonAppVersion, commonMapVersion 
   const image = map.image ?? map.path;
   const imagePath = image ? resolveBuildPath(image, map.fromConfig === false ? cwd : configDir) : null;
   const bounds = parseBoundsString(map.bounds);
-  const imageFilename = imagePath ? import_node_path.default.basename(imagePath) : null;
+  const imageFilename = imagePath ? import_node_path2.default.basename(imagePath) : null;
   const imageMimeType = imageFilename ? mimeTypeForImage(imageFilename) : null;
   return {
     levelId: typeof map.levelId === "string" ? map.levelId.trim() : map.levelId ?? map.level_id ?? null,
@@ -249,9 +296,6 @@ function normalizeMap(map, { configDir, cwd, commonAppVersion, commonMapVersion 
   };
 }
 function validateMapPlan(plan) {
-  if (!plan.token) {
-    throw new Error("Missing API token. Set TESTING_FLOOR_API_TOKEN or pass --token.");
-  }
   if (!plan.organizationId) {
     throw new Error(
       "Missing organization id. Set organizationId in config, TESTING_FLOOR_ORGANIZATION_ID, or pass --organization-id."
@@ -340,11 +384,11 @@ function optionalString(value) {
   return string === "" ? null : string;
 }
 function mimeTypeForImage(filename) {
-  return IMAGE_MIME_TYPES[import_node_path.default.extname(filename).toLowerCase()] ?? null;
+  return IMAGE_MIME_TYPES[import_node_path2.default.extname(filename).toLowerCase()] ?? null;
 }
 var MANIFEST_VERIFY_TIMEOUT_MS = 45 * 60 * 1e3;
 async function readJson(filePath) {
-  const raw = await (0, import_promises.readFile)(filePath, "utf8");
+  const raw = await (0, import_promises2.readFile)(filePath, "utf8");
   try {
     return JSON.parse(raw);
   } catch (error) {
@@ -354,8 +398,8 @@ async function readJson(filePath) {
 async function pathInfo(filePath, { allowDirectory, label }) {
   let stats;
   try {
-    await (0, import_promises.access)(filePath);
-    stats = await (0, import_promises.stat)(filePath);
+    await (0, import_promises2.access)(filePath);
+    stats = await (0, import_promises2.stat)(filePath);
   } catch {
     throw new Error(`${label} not found: ${filePath}`);
   }
@@ -379,10 +423,10 @@ async function pathInfo(filePath, { allowDirectory, label }) {
 }
 async function directorySize(dir) {
   let total = 0;
-  const handle = await (0, import_promises.opendir)(dir);
+  const handle = await (0, import_promises2.opendir)(dir);
   for await (const entry of handle) {
-    const fullPath = import_node_path.default.join(dir, entry.name);
-    const entryStats = await (0, import_promises.stat)(fullPath);
+    const fullPath = import_node_path2.default.join(dir, entry.name);
+    const entryStats = await (0, import_promises2.stat)(fullPath);
     if (entryStats.isDirectory()) {
       total += await directorySize(fullPath);
     } else if (entryStats.isFile()) {
@@ -501,7 +545,23 @@ function parseJsonResponse(text, url) {
   }
 }
 function resolveBuildPath(filePath, baseDir) {
-  return import_node_path.default.isAbsolute(filePath) ? filePath : import_node_path.default.resolve(baseDir, filePath);
+  return import_node_path2.default.isAbsolute(filePath) ? filePath : import_node_path2.default.resolve(baseDir, filePath);
+}
+async function resolveToken({ options, env, config, apiUrl }) {
+  const token = firstPresent(options.token, env.TESTING_FLOOR_API_TOKEN, config.token);
+  if (token) {
+    return token;
+  }
+  const saved = await readSavedLogin(env);
+  if (saved?.apiUrl === apiUrl) {
+    return saved.token;
+  }
+  if (saved) {
+    throw new Error(
+      `Missing API token for ${apiUrl}. You're signed in to ${saved.apiUrl}; run "testingfloor login --api-url ${apiUrl}" to sign in there, set TESTING_FLOOR_API_TOKEN, or pass --token.`
+    );
+  }
+  throw new Error('Missing API token. Run "testingfloor login", set TESTING_FLOOR_API_TOKEN, or pass --token.');
 }
 function normalizeApiUrl(raw) {
   const url = new URL(raw);
@@ -520,7 +580,7 @@ function firstPresent(...values) {
 }
 
 // src/action-map.js
-async function runMapAction(env = import_node_process3.default.env, cwd = import_node_process3.default.cwd()) {
+async function runMapAction(env = import_node_process4.default.env, cwd = import_node_process4.default.cwd()) {
   const options = readMapInputs(env);
   const plan = await resolveMapPlan(options, env, cwd);
   const result = await uploadMap(plan, plan.maps[0]);

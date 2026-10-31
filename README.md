@@ -18,6 +18,24 @@ Or run without installing:
 node bin/testingfloor.js upload-build --help
 ```
 
+## Sign in
+
+On your own computer, sign in with your browser:
+
+```sh
+testingfloor login
+```
+
+The CLI shows a code and opens a Testing Floor page where you approve it. After you approve, it saves a token for this computer, and later commands use it. To print the link without opening a browser (for example, over SSH), add `--no-browser`. Use `--api-url` or `TESTING_FLOOR_API_URL` to sign in to a different Testing Floor server.
+
+`testingfloor whoami` shows who is signed in. `testingfloor logout` deletes the saved token from this computer. Signing in again replaces the saved login.
+
+In CI, don't sign in. Store an API token as a secret and pass it as `TESTING_FLOOR_API_TOKEN`, with `--token`, or as the GitHub Action's `api-token` input.
+
+Commands use the first token they find: `--token`, then `TESTING_FLOOR_API_TOKEN`, then `token` in a `--config` file, then the saved login. The saved login is only sent to the API URL it was issued for.
+
+The login is saved in `credentials.json`, which only you can read, in `$XDG_CONFIG_HOME/testingfloor` (by default `~/.config/testingfloor`), or in `%APPDATA%\testingfloor` on Windows. Set `TESTING_FLOOR_CONFIG_DIR` to keep it in a different folder.
+
 ## Single Build
 
 ```sh
@@ -278,6 +296,7 @@ Map object:
 - `TESTING_FLOOR_MAP_VERSION`
 - `TESTING_FLOOR_GIT_SHA`
 - `TESTING_FLOOR_BUTLER_PATH`
+- `TESTING_FLOOR_CONFIG_DIR`: folder for the saved login (see [Sign in](#sign-in))
 
 CLI flags override environment and config values.
 
