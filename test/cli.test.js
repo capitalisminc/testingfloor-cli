@@ -11,6 +11,7 @@ import {
   butlerDownloadUrl,
   parseJsonInput,
   readInputs,
+  runAction,
   resolveActionBuild,
   resolveActionButlerPath
 } from "../src/action-core.js";
@@ -68,6 +69,38 @@ test("parseArgs parses the build directory and butler flags", () => {
 
   assert.equal(parsed.options.buildDirectory, "build/windows");
   assert.equal(parsed.options.butlerPath, "/usr/local/bin/butler");
+});
+
+test("build descriptions preserve arbitrary text across flags, environment, and config", async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  const description = "  Input fixes\n<plain text> 🎮  ";
+  const options = {
+    organizationId: "example-studio", gameId: "my-game", platform: "windows",
+    buildDirectory: "build", launchPath: "Game.exe", version: "1.2.3", token: "tf_test"
+  };
+  const parsed = parseArgs(["upload-build", "--description", description]);
+  assert.equal(parsed.options.description, description);
+
+  const plan = await resolveUploadPlan({ ...options, ...parsed.options }, { TESTING_FLOOR_DESCRIPTION: "env notes" }, cwd);
+  assert.equal(plan.builds[0].description, description);
+  const envPlan = await resolveUploadPlan(options, { TESTING_FLOOR_DESCRIPTION: description }, cwd);
+  assert.equal(envPlan.builds[0].description, description);
+  const omitted = await resolveUploadPlan(options, {}, cwd);
+  assert.equal(omitted.builds[0].description, undefined);
+
+  await writeFile(path.join(cwd, "builds.json"), JSON.stringify({
+    ...options, description, builds: [
+      { platform: "windows", buildDirectory: "win", launchPath: "Game.exe" },
+      { platform: "linux", buildDirectory: "linux", launchPath: "Game", description: "Linux fixes" },
+      { platform: "macos", buildDirectory: "mac", launchPath: "Game.app", description: "" }
+    ]
+  }));
+  const configured = await resolveUploadPlan({ config: "builds.json" }, {}, cwd);
+  assert.deepEqual(configured.builds.map((build) => build.description), [description, "Linux fixes", ""]);
+
+  await resolveUploadPlan({ ...options, description: "🎮".repeat(1000) }, {}, cwd);
+  await assert.rejects(resolveUploadPlan({ ...options, description: "a".repeat(1001) }, {}, cwd), /at most 1000 characters/);
+  await assert.rejects(resolveUploadPlan({ ...options, description: { note: "invalid" } }, {}, cwd), /must be text/);
 });
 
 test("parseArgs explains that --archive-kind was removed", () => {
@@ -350,6 +383,7 @@ test("readInputs accepts GitHub's hyphenated action input environment names", ()
     "INPUT_BUILD-DIRECTORY": "build/Mono/Release/StandaloneWindows64",
     "INPUT_LAUNCH-PATH": "Game.exe",
     INPUT_VERSION: "0.4.12",
+    INPUT_DESCRIPTION: "  Input fixes\nNew tutorial  ",
     "INPUT_SOURCE-REF": "{\"run_id\":\"123\"}",
     "INPUT_LAUNCH-ARGS": "[\"--safe\"]"
   });
@@ -358,6 +392,7 @@ test("readInputs accepts GitHub's hyphenated action input environment names", ()
   assert.equal(inputs.butlerPath, "/opt/butler");
   assert.equal(inputs.butlerVersion, "15.26.1");
   assert.equal(inputs.gameId, "42");
+  assert.equal(inputs.description, "  Input fixes\nNew tutorial  ");
   assert.equal(inputs.organizationId, "gamedepartment");
   assert.equal(inputs.buildDirectory, "build/Mono/Release/StandaloneWindows64");
   assert.equal(inputs.launchPath, "Game.exe");
@@ -435,7 +470,7 @@ test("butlerDownloadUrl maps runner platforms to itch broth downloads", () => {
 // failures maps "METHOD /path" to what its next requests get instead of an
 // answer: "reset" drops the connection, a number answers with that status and
 // an HTML page, the way a proxy does.
-function chunkDeliveryServer({ manifestStatuses, alreadyStored = 1, patchUpload = null, failures = {} }) {
+function chunkDeliveryServer({ manifestStatuses, alreadyStored = 1, patchUpload = null, failures = {}, organizationId = "gamedepartment", gameId = "42" }) {
   const state = { announced: [], uploads: {}, parts: [], manifest: null, createPayload: null, completePayload: null, wharfBaseUrl: null, polls: 0, requests: {}, order: [] };
   const server = http.createServer(async (request, response) => {
     try {
@@ -455,12 +490,12 @@ function chunkDeliveryServer({ manifestStatuses, alreadyStored = 1, patchUpload 
         response.end("<html><body>Bad gateway</body></html>");
         return;
       }
-      if (request.method === "GET" && request.url.startsWith("/api/organizations/gamedepartment/games/42/builds/wharf/base")) {
+      if (request.method === "GET" && request.url.startsWith(`/api/organizations/${organizationId}/games/${gameId}/builds/wharf/base`)) {
         state.wharfBaseUrl = request.url;
         writeJson(response, 200, { build_id: null, signature_url: null });
         return;
       }
-      if (request.method === "POST" && request.url === "/api/organizations/gamedepartment/games/42/builds") {
+      if (request.method === "POST" && request.url === `/api/organizations/${organizationId}/games/${gameId}/builds`) {
         state.createPayload = JSON.parse(await readRequestBody(request));
         const upload = (name) => ({ signed_id: `${name}-signed`, upload_strategy: "direct", upload_url: `${serverUrl(server)}/uploads/${name}`, upload_headers: {} });
         writeJson(response, 201, { id: 8, archive_kind: "wharf", uploads: { patch: patchUpload?.(serverUrl(server)) ?? upload("patch"), signature: upload("signature") } });
@@ -565,6 +600,32 @@ test("uploadBuild sends the wharf patch, then only new chunks and the manifest, 
   assert.deepEqual(state.completePayload, { patch_signed_id: "patch-signed", signature_signed_id: "signature-signed" });
   assert.equal(state.order.at(-1), "POST /api/game_builds/8/complete", "the build is offered only once its chunks are verified");
   assert.equal(state.order.at(-2), "GET /api/game_builds/8/manifest");
+});
+
+test("the GitHub Action sends its plain text description to the build upload API", async (t) => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  await mkdir(path.join(cwd, "game"));
+  await writeFile(path.join(cwd, "game", "Game.exe"), "binary");
+  const { server, state } = chunkDeliveryServer({ manifestStatuses: [{ status: "verified" }], alreadyStored: 0, organizationId: "example-studio", gameId: "my-game" });
+  await listen(server);
+  t.after(() => server.close());
+  const description = "  Input fixes\n<plain text> 🎮  ";
+
+  await runAction({
+    "INPUT_API-TOKEN": "tf_test",
+    "INPUT_API-URL": serverUrl(server),
+    "INPUT_ORGANIZATION-ID": "example-studio",
+    "INPUT_GAME-ID": "my-game",
+    "INPUT_BUILD-DIRECTORY": "game",
+    "INPUT_BUTLER-PATH": await writeFakeButler(cwd),
+    INPUT_PLATFORM: "windows",
+    "INPUT_LAUNCH-PATH": "Game.exe",
+    INPUT_VERSION: "1.2.3",
+    INPUT_DESCRIPTION: description,
+    GITHUB_OUTPUT: path.join(cwd, "outputs")
+  }, cwd);
+
+  assert.equal(state.createPayload.description, description);
 });
 
 test("uploadBuild uploads a large wharf patch in parts and completes with their ETags", async (t) => {

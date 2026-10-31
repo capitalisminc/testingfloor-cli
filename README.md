@@ -55,6 +55,8 @@ testingfloor upload-build \
 
 The API token must belong to a user, include the `builds:create` scope, and the user must be able to manage games for the target game's organization.
 
+Add `--description "Fixes input and updates the tutorial"` to include an optional plain text description of up to 1,000 characters. Line breaks are preserved. The description appears only in the website's build list. You can also set `TESTING_FLOOR_DESCRIPTION`, or add `description` at the top level of a build config file. A build's own `description` overrides that shared value; an empty string clears it for that build.
+
 ## How builds are uploaded
 
 You point the CLI at the ready-to-run build folder; there's nothing else to choose. Each upload:
@@ -125,6 +127,7 @@ Use this repository directly as a GitHub Action:
     build-directory: build/Mono/Release/${{ matrix.platform }}
     launch-path: Game.exe
     version: ${{ matrix.version }}
+    description: "Fixes input and updates the tutorial"
     git-sha: ${{ github.sha }}
     source-ref: |
       {
