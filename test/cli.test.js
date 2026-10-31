@@ -1127,7 +1127,7 @@ test("telemetry schema plan validates object files and merge mode", async () => 
   await assert.rejects(resolveTelemetryPlan({ mode: "unknown" }, env, cwd), /merge or replace/);
   await writeFile(path.join(cwd, "schema.json"), "[]");
   await assert.rejects(resolveTelemetryPlan({ schema: "schema.json" }, env, cwd), /JSON object/);
-  await assert.rejects(resolveTelemetryPlan({}, {}, cwd), /Missing API token/);
+  await assert.rejects(resolveTelemetryPlan({}, { TESTING_FLOOR_CONFIG_DIR: cwd }, cwd), /Missing API token/);
 });
 
 test("telemetry schema uses authenticated GET and PATCH on the org-qualified API", async () => {
