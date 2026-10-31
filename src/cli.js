@@ -13,6 +13,7 @@ import { readSavedLogin } from "./credentials.js";
 import { login, logout, whoami } from "./login.js";
 
 const DEFAULT_API_URL = "https://api.testingfloor.com";
+const DESCRIPTION_MAX_LENGTH = 1000;
 const PLATFORMS = new Set(["windows", "macos", "linux"]);
 const AXES = new Set(["x", "y", "z"]);
 const IMAGE_MIME_TYPES = {
@@ -31,6 +32,7 @@ const VALUE_OPTIONS = new Set([
   "build-directory",
   "butler-path",
   "config",
+  "description",
   "filename",
   "game-id",
   "git-sha",
@@ -234,6 +236,7 @@ export async function resolveUploadPlan(options, env = {}, cwd = process.cwd()) 
   );
   const gameId = firstPresent(options.gameId, env.TESTING_FLOOR_GAME_ID, config.gameId);
   const version = firstPresent(options.version, env.TESTING_FLOOR_VERSION, config.version);
+  const description = options.description ?? env.TESTING_FLOOR_DESCRIPTION ?? config.description;
   const gitSha = firstPresent(options.gitSha, env.TESTING_FLOOR_GIT_SHA, env.GITHUB_SHA, config.gitSha);
   const sourceRef = {
     ...githubSourceRef(env),
@@ -249,6 +252,7 @@ export async function resolveUploadPlan(options, env = {}, cwd = process.cwd()) 
       configDir,
       cwd,
       commonVersion: version,
+      commonDescription: description,
       commonGitSha: gitSha,
       commonSourceRef: sourceRef,
       commonBranch: branch
@@ -635,6 +639,7 @@ export async function uploadBuild(plan, build, { log = console.error, pollInterv
       platform: build.platform,
       branch: build.branch,
       version: build.version,
+      description: build.description,
       git_sha: build.gitSha,
       archive_kind: "wharf",
       zip_delivery: "chunk_manifest",
@@ -900,6 +905,7 @@ function buildFromOptions(options) {
   return {
     buildDirectory: options.buildDirectory ?? options.archive,
     branch: options.branch,
+    description: options.description,
     filename: options.filename,
     gitSha: options.gitSha,
     launchArgs: options.launchArg,
@@ -911,13 +917,14 @@ function buildFromOptions(options) {
   };
 }
 
-function normalizeBuild(build, { configDir, cwd, commonVersion, commonGitSha, commonSourceRef, commonBranch }) {
+function normalizeBuild(build, { configDir, cwd, commonVersion, commonDescription, commonGitSha, commonSourceRef, commonBranch }) {
   // archive and path are older names for the same folder.
   const directory = build.buildDirectory ?? build.build_directory ?? build.archive ?? build.path;
 
   return {
     buildDirectory: directory ? resolveBuildPath(directory, build.fromConfig === false ? cwd : configDir) : null,
     branch: build.branch ?? commonBranch ?? undefined,
+    description: build.description ?? commonDescription,
     filename: build.filename ?? defaultBuildFilename(directory),
     gitSha: build.gitSha ?? build.git_sha ?? commonGitSha,
     launchArgs: normalizeLaunchArgs(build.launchArgs ?? build.launch_args),
@@ -979,6 +986,10 @@ function validatePlan(plan) {
 
     if (!build.version) {
       throw new Error(`Missing version for ${build.platform}.`);
+    }
+
+    if (build.description !== undefined && (typeof build.description !== "string" || Array.from(build.description).length > DESCRIPTION_MAX_LENGTH)) {
+      throw new Error(`Build description must be text of at most ${DESCRIPTION_MAX_LENGTH} characters.`);
     }
 
     if (!build.launchPath) {
@@ -1376,6 +1387,7 @@ Environment:
   TESTING_FLOOR_ORGANIZATION_ID Organization slug or numeric id
   TESTING_FLOOR_GAME_ID         Numeric game id
   TESTING_FLOOR_VERSION         Build version / map app_version metadata
+  TESTING_FLOOR_DESCRIPTION     Optional build description (up to 1000 characters)
   TESTING_FLOOR_MAP_VERSION     Telemetry map version number
   TESTING_FLOOR_GIT_SHA         Git SHA metadata (builds)
   TESTING_FLOOR_BUTLER_PATH     Path to butler (makes the recorder's patch)
@@ -1386,6 +1398,7 @@ Build options:
   --filename <name>         Name for the zip download, defaults to the folder name
   --butler-path <path>      Path to butler (makes the recorder's patch)
   --version <version>       Version metadata
+  --description <text>      Optional plain text, up to 1000 characters; website build list only
   --git-sha <sha>           Git SHA metadata
   --launch-path <path>      Executable path inside the build folder
   --launch-arg <arg>        Launch argument, repeatable

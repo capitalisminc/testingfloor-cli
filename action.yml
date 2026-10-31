@@ -46,6 +46,9 @@ inputs:
   version:
     description: Build version metadata.
     required: true
+  description:
+    description: Optional plain text description, up to 1000 characters. Shown only in the website's build list.
+    required: false
   git-sha:
     description: Git SHA metadata.
     required: false

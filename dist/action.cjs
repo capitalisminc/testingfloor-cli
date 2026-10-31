@@ -23121,6 +23121,7 @@ var REQUEST_TIMEOUT_MS = 30 * 1e3;
 
 // src/cli.js
 var DEFAULT_API_URL = "https://api.testingfloor.com";
+var DESCRIPTION_MAX_LENGTH = 1e3;
 var PLATFORMS = /* @__PURE__ */ new Set(["windows", "macos", "linux"]);
 async function resolveUploadPlan(options, env = {}, cwd = import_node_process3.default.cwd()) {
   const configPath = options.config ? import_node_path3.default.resolve(cwd, options.config) : null;
@@ -23150,6 +23151,7 @@ async function resolveUploadPlan(options, env = {}, cwd = import_node_process3.d
   );
   const gameId = firstPresent(options.gameId, env.TESTING_FLOOR_GAME_ID, config.gameId);
   const version = firstPresent(options.version, env.TESTING_FLOOR_VERSION, config.version);
+  const description = options.description ?? env.TESTING_FLOOR_DESCRIPTION ?? config.description;
   const gitSha = firstPresent(options.gitSha, env.TESTING_FLOOR_GIT_SHA, env.GITHUB_SHA, config.gitSha);
   const sourceRef = {
     ...githubSourceRef(env),
@@ -23164,6 +23166,7 @@ async function resolveUploadPlan(options, env = {}, cwd = import_node_process3.d
       configDir,
       cwd,
       commonVersion: version,
+      commonDescription: description,
       commonGitSha: gitSha,
       commonSourceRef: sourceRef,
       commonBranch: branch
@@ -23228,6 +23231,7 @@ async function uploadBuild(plan, build, { log = console.error, pollIntervalMs, r
       platform: build.platform,
       branch: build.branch,
       version: build.version,
+      description: build.description,
       git_sha: build.gitSha,
       archive_kind: "wharf",
       zip_delivery: "chunk_manifest",
@@ -23463,6 +23467,7 @@ function buildFromOptions(options) {
   return {
     buildDirectory: options.buildDirectory ?? options.archive,
     branch: options.branch,
+    description: options.description,
     filename: options.filename,
     gitSha: options.gitSha,
     launchArgs: options.launchArg,
@@ -23473,11 +23478,12 @@ function buildFromOptions(options) {
     workingDirectory: options.workingDirectory
   };
 }
-function normalizeBuild(build, { configDir, cwd, commonVersion, commonGitSha, commonSourceRef, commonBranch }) {
+function normalizeBuild(build, { configDir, cwd, commonVersion, commonDescription, commonGitSha, commonSourceRef, commonBranch }) {
   const directory = build.buildDirectory ?? build.build_directory ?? build.archive ?? build.path;
   return {
     buildDirectory: directory ? resolveBuildPath(directory, build.fromConfig === false ? cwd : configDir) : null,
     branch: build.branch ?? commonBranch ?? void 0,
+    description: build.description ?? commonDescription,
     filename: build.filename ?? defaultBuildFilename(directory),
     gitSha: build.gitSha ?? build.git_sha ?? commonGitSha,
     launchArgs: normalizeLaunchArgs(build.launchArgs ?? build.launch_args),
@@ -23528,6 +23534,9 @@ function validatePlan(plan) {
     }
     if (!build.version) {
       throw new Error(`Missing version for ${build.platform}.`);
+    }
+    if (build.description !== void 0 && (typeof build.description !== "string" || Array.from(build.description).length > DESCRIPTION_MAX_LENGTH)) {
+      throw new Error(`Build description must be text of at most ${DESCRIPTION_MAX_LENGTH} characters.`);
     }
     if (!build.launchPath) {
       throw new Error(`Missing launchPath for ${build.platform}.`);
@@ -23828,6 +23837,7 @@ async function runAction(env = import_node_process4.default.env, cwd = import_no
       apiUrl: inputs.apiUrl,
       buildDirectory: build.buildDirectory,
       branch: inputs.branch,
+      description: inputs.description,
       butlerPath,
       filename: build.filename,
       gameId: inputs.gameId,
@@ -23862,6 +23872,7 @@ function readInputs(env) {
     butlerPath: input(env, "butler-path"),
     butlerVersion: input(env, "butler-version") || "LATEST",
     buildDirectory: requiredInput(env, "build-directory"),
+    description: input(env, "description") ?? void 0,
     filename: input(env, "filename"),
     gameId: requiredInput(env, "game-id"),
     gitSha: input(env, "git-sha"),
