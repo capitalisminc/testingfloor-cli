@@ -9,6 +9,9 @@ const MAX_WAIT_MS = 15 * 60 * 1000;
 // RFC 8628 device sign-in: each "slow down" answer adds 5 seconds to the
 // interval for the rest of the wait.
 const SLOW_DOWN_STEP_MS = 5000;
+// A request that stalls counts as a missed poll, so waiting ends at most one
+// timeout after expires_at.
+const REQUEST_TIMEOUT_MS = 30 * 1000;
 const ENV_TOKEN_IN_USE = "TESTING_FLOOR_API_TOKEN is set, so commands use that token instead of a saved login.";
 
 // Device sign-in: Testing Floor issues a short code, the person approves it
@@ -21,10 +24,11 @@ export async function login({
   openBrowser = openInBrowser,
   sleep = defaultSleep,
   now = Date.now,
+  requestTimeoutMs = REQUEST_TIMEOUT_MS,
   log = console.error,
   print = console.log
 }) {
-  const activation = await startActivation(apiUrl, { device_name: os.hostname(), cli_version: cliVersion });
+  const activation = await startActivation(apiUrl, { device_name: os.hostname(), cli_version: cliVersion }, requestTimeoutMs);
 
   log(`Your code: ${activation.code}`);
   log(`Approve it at ${activation.claimUrl}`);
@@ -33,7 +37,7 @@ export async function login({
   }
   log("Waiting for approval...");
 
-  const claim = await waitForClaim(activation, { sleep, now, log });
+  const claim = await waitForClaim(activation, { sleep, now, log, requestTimeoutMs });
   await saveLogin(env, {
     apiUrl,
     token: claim.token,
@@ -118,9 +122,9 @@ export function browserCommand(url, platform = process.platform) {
   return { command: "xdg-open", args: [url], options: {} };
 }
 
-async function startActivation(apiUrl, details) {
+async function startActivation(apiUrl, details, timeoutMs) {
   const url = `${apiUrl}/api/cli/activations`;
-  const response = await send(url, { method: "POST", body: details });
+  const response = await send(url, { method: "POST", body: details, timeoutMs });
   if (response.unreachable) {
     throw new Error(`Couldn't start signing in: ${response.unreachable}`);
   }
@@ -142,7 +146,7 @@ async function startActivation(apiUrl, details) {
   };
 }
 
-async function waitForClaim(activation, { sleep, now, log }) {
+async function waitForClaim(activation, { sleep, now, log, requestTimeoutMs }) {
   const startedAt = now();
   // expires_at is the server's clock. If it already looks past, this clock is
   // probably ahead, so wait the usual 15 minutes; the server still answers
@@ -159,7 +163,7 @@ async function waitForClaim(activation, { sleep, now, log }) {
     }
     await sleep(Math.min(delayMs, remainingMs));
 
-    const outcome = pollOutcome(await send(activation.pollUrl, { method: "GET" }), now);
+    const outcome = pollOutcome(await send(activation.pollUrl, { method: "GET", timeoutMs: requestTimeoutMs }), now);
     delayMs = intervalMs;
 
     switch (outcome.kind) {
@@ -219,7 +223,7 @@ function pollOutcome(response, now) {
 }
 
 // The poll URL carries a secret, so errors name the host, never the URL.
-async function send(url, { method, body }) {
+async function send(url, { method, body, timeoutMs }) {
   const headers = { Accept: "application/json" };
   if (body) {
     headers["Content-Type"] = "application/json";
@@ -228,10 +232,12 @@ async function send(url, { method, body }) {
   let response;
   let text;
   try {
-    response = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
+    const signal = AbortSignal.timeout(timeoutMs);
+    response = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined, signal });
     text = await response.text();
   } catch (error) {
-    return { unreachable: `couldn't reach ${new URL(url).host}: ${error.cause?.code ?? error.cause?.message ?? error.message}` };
+    const reason = error.name === "TimeoutError" ? "no answer in time" : (error.cause?.code ?? error.cause?.message ?? error.message);
+    return { unreachable: `couldn't reach ${new URL(url).host}: ${reason}` };
   }
 
   return { status: response.status, statusText: response.statusText, headers: response.headers, body: parseJson(text) };

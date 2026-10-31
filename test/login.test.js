@@ -15,7 +15,8 @@ const POLL_TOKEN = "poll-secret";
 const USER = { name: "Ada Lovelace", email: "ada@example.com" };
 
 // A Testing Floor stand-in that answers polls from a script of
-// [status, body, headers] replies, repeating the last one.
+// [status, body, headers] replies, repeating the last one. A "stall" reply
+// starts the response and never finishes it.
 function activationServer(polls, { expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString() } = {}) {
   const state = { activationRequests: [], pollRequests: [] };
   const server = http.createServer(async (request, response) => {
@@ -39,6 +40,10 @@ function activationServer(polls, { expiresAt = new Date(Date.now() + 10 * 60 * 1
     if (request.method === "GET" && url.pathname === "/api/cli/activations/ABC123") {
       state.pollRequests.push({ headers: request.headers, pollToken: url.searchParams.get("poll_token") });
       const [status, reply, headers] = polls[Math.min(state.pollRequests.length - 1, polls.length - 1)];
+      if (status === "stall") {
+        response.writeHead(200, { "Content-Type": "application/json" });
+        return response.write('{"status":');
+      }
       return writeJson(response, status, reply, headers);
     }
 
@@ -50,7 +55,10 @@ function activationServer(polls, { expiresAt = new Date(Date.now() + 10 * 60 * 1
 async function startServer(t, polls, options) {
   const { server, state } = activationServer(polls, options);
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  t.after(() => server.close());
+  t.after(() => {
+    server.closeAllConnections();
+    server.close();
+  });
   return { apiUrl: `http://127.0.0.1:${server.address().port}`, state };
 }
 
@@ -149,6 +157,20 @@ test("login stops waiting at expires_at even if the server keeps saying pending"
   await assert.rejects(login({ ...fake.deps, apiUrl, env: { TESTING_FLOOR_CONFIG_DIR: await configDir() } }), /expired before it was approved/);
   assert.deepEqual(fake.delays, [3000, 3000, 3000, 1000], "the last wait ends at expires_at");
   assert.equal(state.pollRequests.length, 4);
+});
+
+test("a poll that never finishes counts as a missed poll, and waiting still ends at expires_at", { timeout: 5000 }, async (t) => {
+  const fake = fakes();
+  const { apiUrl, state } = await startServer(t, [["stall"]], { expiresAt: new Date(fake.clock + 10_000).toISOString() });
+
+  await assert.rejects(
+    login({ ...fake.deps, requestTimeoutMs: 50, apiUrl, env: { TESTING_FLOOR_CONFIG_DIR: await configDir() } }),
+    /expired before it was approved/
+  );
+  assert.equal(state.pollRequests.length, 4);
+  assert.deepEqual(fake.logged.filter((line) => line.startsWith("Couldn't check for approval just now")), [
+    `Couldn't check for approval just now (couldn't reach ${new URL(apiUrl).host}: no answer in time); still waiting.`
+  ]);
 });
 
 test("login slows down when asked to and keeps polling", async (t) => {
