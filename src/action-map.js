@@ -33,7 +33,8 @@ export function readMapInputs(env) {
     token: requiredInput(env, "api-token"),
     variantKey: input(env, "variant-key") || input(env, "variant") || undefined,
     defaultVariant: input(env, "default-variant") || undefined,
-    verticalAxis: input(env, "vertical-axis") || undefined
+    verticalAxis: input(env, "vertical-axis") || undefined,
+    worldUnitsPerMeter: input(env, "world-units-per-meter") || undefined
   };
 }
 

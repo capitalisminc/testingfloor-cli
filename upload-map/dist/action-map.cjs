@@ -145,7 +145,7 @@ async function resolveMapPlan(options, env = {}, cwd = import_node_process3.defa
   const config = configPath ? await readJson(configPath) : {};
   const configDir = configPath ? import_node_path2.default.dirname(configPath) : cwd;
   const cliMapRequested = Boolean(
-    options.levelId || options.image || options.bounds || options.horizontalAxis || options.verticalAxis || options.variant || options.variantKey || options.defaultVariant
+    options.levelId || options.image || options.bounds || options.horizontalAxis || options.verticalAxis || options.variant || options.variantKey || options.defaultVariant || options.worldUnitsPerMeter
   );
   const configuredMaps = Array.isArray(config.maps) ? config.maps : [];
   if (cliMapRequested && configuredMaps.length > 0) {
@@ -244,6 +244,7 @@ async function uploadMap(plan, map, { log = console.error } = {}) {
     variant_key: map.variantKey || void 0,
     version: map.version || void 0,
     default_variant: map.defaultVariant === null || map.defaultVariant === void 0 ? void 0 : map.defaultVariant,
+    world_units_per_meter: map.worldUnitsPerMeter ?? void 0,
     image_signed_id: imageUpload.signed_id
   });
   return {
@@ -258,6 +259,7 @@ async function uploadMap(plan, map, { log = console.error } = {}) {
     bounds: response.bounds ?? null,
     horizontalAxis: response.map_horizontal_axis ?? map.horizontalAxis,
     verticalAxis: response.map_vertical_axis ?? map.verticalAxis,
+    worldUnitsPerMeter: response.world_units_per_meter ?? map.worldUnitsPerMeter ?? null,
     configured: response.configured ?? null,
     created: response.created ?? null
   };
@@ -272,7 +274,8 @@ function mapFromOptions(options) {
     appVersion: options.appVersion,
     variantKey: options.variantKey ?? options.variant,
     mapVersion: options.mapVersion,
-    defaultVariant: options.defaultVariant
+    defaultVariant: options.defaultVariant,
+    worldUnitsPerMeter: options.worldUnitsPerMeter
   };
 }
 function normalizeMap(map, { configDir, cwd, commonAppVersion, commonMapVersion }) {
@@ -292,7 +295,9 @@ function normalizeMap(map, { configDir, cwd, commonAppVersion, commonMapVersion 
     appVersion: map.appVersion ?? map.app_version ?? commonAppVersion ?? null,
     variantKey: optionalString(map.variantKey ?? map.variant_key ?? map.variant),
     version: optionalPositiveInteger(map.mapVersion ?? map.map_version ?? map.version ?? commonMapVersion, "map.version"),
-    defaultVariant: optionalBoolean(map.defaultVariant ?? map.default_variant, "map.defaultVariant")
+    defaultVariant: optionalBoolean(map.defaultVariant ?? map.default_variant, "map.defaultVariant"),
+    // Unset means the map takes the game's scale, which is what most games want.
+    worldUnitsPerMeter: optionalPositiveNumber(map.worldUnitsPerMeter ?? map.world_units_per_meter, "map.worldUnitsPerMeter")
   };
 }
 function validateMapPlan(plan) {
@@ -347,6 +352,16 @@ function numericValue(value, name) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
     throw new Error(`${name} must be a finite number, got "${value}".`);
+  }
+  return parsed;
+}
+function optionalPositiveNumber(value, name) {
+  if (value === void 0 || value === null || value === "") {
+    return null;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive number, got "${value}".`);
   }
   return parsed;
 }
@@ -608,7 +623,8 @@ function readMapInputs(env) {
     token: requiredInput(env, "api-token"),
     variantKey: input(env, "variant-key") || input(env, "variant") || void 0,
     defaultVariant: input(env, "default-variant") || void 0,
-    verticalAxis: input(env, "vertical-axis") || void 0
+    verticalAxis: input(env, "vertical-axis") || void 0,
+    worldUnitsPerMeter: input(env, "world-units-per-meter") || void 0
   };
 }
 function boundsFromInputs(env) {

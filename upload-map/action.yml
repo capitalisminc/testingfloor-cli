@@ -57,6 +57,9 @@ inputs:
   default-variant:
     description: Whether this variant should be the default for this map version.
     required: false
+  world-units-per-meter:
+    description: Overrides the game's world units per meter for this map. Leave it unset so the map uses the game's setting.
+    required: false
 
 outputs:
   map-id:

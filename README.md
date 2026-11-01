@@ -182,6 +182,8 @@ testingfloor upload-map \
 
 `--bounds` is `center_x,center_z,size_x,size_z` in world units. `--app-version` is optional telemetry metadata that lets Testing Floor match maps to captures from the same game build. Use `--variant-key` for alternate floors, view modes, or other same-version map variants. Use `--map-version` when you need to update a specific telemetry map version instead of letting the server choose the current version. Mark one variant with `--default-variant true` when it should be the default view for that level/version.
 
+A new map takes the game's world units per meter from its Testing Floor settings, such as 100 for an Unreal game. Leave it at that. `--world-units-per-meter` overrides it for one map, which is only right when that level really uses a different scale from the rest of the game.
+
 ### Multiple Maps
 
 Create `testingfloor-maps.json`:
@@ -288,6 +290,7 @@ Map object:
 - `mapVersion` or `version`: optional telemetry map version number override.
 - `variantKey` or `variant`: optional variant key for floors, modes, or alternate views.
 - `defaultVariant`: optional boolean that marks this variant as the default for its level/version.
+- `worldUnitsPerMeter`: optional override of the game's world units per meter for this map. Leave it unset unless this level uses a different scale from the rest of the game.
 
 ## Environment
 
