@@ -328,3 +328,12 @@ The schema file contains the mappings directly:
 Updates merge by default, preserving mappings not mentioned in the file. Use `--mode replace` to remove unspecified mappings. Arrays are replaced when merging. The server validates the full resulting configuration and refreshes affected recording snapshots. Use an empty string to clear an optional field path; use replacement to remove object entries.
 
 The read response includes `schema_config` and the validation `schema`. The matching HTTP endpoint is `GET` / `PATCH /api/organizations/:organization_id/games/:game_id/telemetry/schema`. PATCH accepts `{ "schema_config": { ... }, "mode": "merge" }`.
+
+## Releasing
+
+npm publishes this package from GitHub Actions through trusted publishing, so no npm token is stored in the repository.
+
+1. Set `version` in `package.json` and `package-lock.json` with `npm version <version> --no-git-tag-version`, and merge that change.
+2. Push a tag for the merged commit, for example `git tag v1.2.3 && git push origin v1.2.3`.
+
+The tag starts the "Publish to npm" workflow, which runs the tests and publishes with provenance.
