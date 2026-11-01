@@ -52,7 +52,8 @@ const VALUE_OPTIONS = new Set([
   "variant-key",
   "version",
   "vertical-axis",
-  "working-directory"
+  "working-directory",
+  "world-units-per-meter"
 ]);
 const REMOVED_OPTIONS = {
   "archive-kind": "--archive-kind was removed. Uploads always send the build directory as chunks for zip downloads, plus a wharf patch for the recorder."
@@ -284,7 +285,8 @@ export async function resolveMapPlan(options, env = {}, cwd = process.cwd()) {
       options.verticalAxis ||
       options.variant ||
       options.variantKey ||
-      options.defaultVariant
+      options.defaultVariant ||
+      options.worldUnitsPerMeter
   );
   const configuredMaps = Array.isArray(config.maps) ? config.maps : [];
   if (cliMapRequested && configuredMaps.length > 0) {
@@ -398,6 +400,7 @@ export async function uploadMap(plan, map, { log = console.error } = {}) {
     version: map.version || undefined,
     default_variant:
       map.defaultVariant === null || map.defaultVariant === undefined ? undefined : map.defaultVariant,
+    world_units_per_meter: map.worldUnitsPerMeter ?? undefined,
     image_signed_id: imageUpload.signed_id
   });
 
@@ -413,6 +416,7 @@ export async function uploadMap(plan, map, { log = console.error } = {}) {
     bounds: response.bounds ?? null,
     horizontalAxis: response.map_horizontal_axis ?? map.horizontalAxis,
     verticalAxis: response.map_vertical_axis ?? map.verticalAxis,
+    worldUnitsPerMeter: response.world_units_per_meter ?? map.worldUnitsPerMeter ?? null,
     configured: response.configured ?? null,
     created: response.created ?? null
   };
@@ -428,7 +432,8 @@ function mapFromOptions(options) {
     appVersion: options.appVersion,
     variantKey: options.variantKey ?? options.variant,
     mapVersion: options.mapVersion,
-    defaultVariant: options.defaultVariant
+    defaultVariant: options.defaultVariant,
+    worldUnitsPerMeter: options.worldUnitsPerMeter
   };
 }
 
@@ -450,7 +455,9 @@ function normalizeMap(map, { configDir, cwd, commonAppVersion, commonMapVersion 
     appVersion: map.appVersion ?? map.app_version ?? commonAppVersion ?? null,
     variantKey: optionalString(map.variantKey ?? map.variant_key ?? map.variant),
     version: optionalPositiveInteger(map.mapVersion ?? map.map_version ?? map.version ?? commonMapVersion, "map.version"),
-    defaultVariant: optionalBoolean(map.defaultVariant ?? map.default_variant, "map.defaultVariant")
+    defaultVariant: optionalBoolean(map.defaultVariant ?? map.default_variant, "map.defaultVariant"),
+    // Unset means the map takes the game's scale, which is what most games want.
+    worldUnitsPerMeter: optionalPositiveNumber(map.worldUnitsPerMeter ?? map.world_units_per_meter, "map.worldUnitsPerMeter")
   };
 }
 
@@ -520,6 +527,19 @@ function numericValue(value, name) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
     throw new Error(`${name} must be a finite number, got "${value}".`);
+  }
+
+  return parsed;
+}
+
+function optionalPositiveNumber(value, name) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive number, got "${value}".`);
   }
 
   return parsed;
@@ -1417,6 +1437,9 @@ Map options:
   --variant-key <key>       Variant key for floors, modes, or alternate map views
   --variant <key>           Alias for --variant-key
   --default-variant <bool>  Whether this variant is the default for the version
+  --world-units-per-meter <n>
+                            Override the game's world units per meter for this map.
+                            Leave unset so the map uses the game's setting
 
 Telemetry schema options:
   --schema <path>          JSON field mappings to apply (set-telemetry-schema)

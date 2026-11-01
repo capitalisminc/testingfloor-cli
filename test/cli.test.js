@@ -802,6 +802,33 @@ test("resolveMapPlan builds single map upload from flags", async () => {
   assert.equal(map.version, 3);
   assert.equal(map.variantKey, "ground-floor");
   assert.equal(map.defaultVariant, true);
+  assert.equal(map.worldUnitsPerMeter, null, "Without an override the map takes the game's scale");
+});
+
+test("resolveMapPlan takes a world units per meter override from a flag or config and rejects a non-positive one", async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  await writeFile(path.join(cwd, "factory.png"), "png bytes");
+  const flags = { bounds: "0,0,200,200", gameId: "42", image: "factory.png", levelId: "factory", organizationId: "gamedepartment" };
+  const env = { TESTING_FLOOR_API_TOKEN: "tf_test" };
+
+  const fromFlag = await resolveMapPlan({ ...flags, worldUnitsPerMeter: "100" }, env, cwd);
+  assert.equal(fromFlag.maps[0].worldUnitsPerMeter, 100);
+
+  const configPath = path.join(cwd, "testingfloor-maps.json");
+  await writeFile(configPath, JSON.stringify({
+    organizationId: "gamedepartment",
+    gameId: 42,
+    maps: [{ levelId: "factory", image: "factory.png", bounds: "0,0,200,200", worldUnitsPerMeter: 50 }]
+  }));
+  const fromConfig = await resolveMapPlan({ config: configPath }, env, cwd);
+  assert.equal(fromConfig.maps[0].worldUnitsPerMeter, 50);
+
+  for (const value of ["0", "-1", "centimeters"]) {
+    await assert.rejects(
+      () => resolveMapPlan({ ...flags, worldUnitsPerMeter: value }, env, cwd),
+      /map\.worldUnitsPerMeter must be a positive number/
+    );
+  }
 });
 
 test("resolveMapPlan supports config maps relative to config file", async () => {
@@ -1025,6 +1052,67 @@ test("uploadMap uses direct upload and returns the created map", async (t) => {
     default_variant: true,
     image_signed_id: "signed-map-image"
   });
+});
+
+test("uploadMap sends a world units per meter override only when one is set", async (t) => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  const imagePath = path.join(cwd, "factory.png");
+  await writeFile(imagePath, "png-bytes");
+  const payloads = [];
+  const server = http.createServer(async (request, response) => {
+    if (request.url.endsWith("/maps/direct_uploads")) {
+      writeJson(response, 200, { image: { signed_id: "signed-map-image", upload_url: `${serverUrl(server)}/direct-map-image`, upload_headers: {} } });
+    } else if (request.url === "/direct-map-image") {
+      await readRequestBody(request);
+      response.writeHead(200);
+      response.end();
+    } else {
+      const payload = JSON.parse(await readRequestBody(request));
+      payloads.push(payload);
+      writeJson(response, 201, { id: payloads.length, level_id: "factory", world_units_per_meter: payload.world_units_per_meter ?? 100 });
+    }
+  });
+  await listen(server);
+  t.after(() => server.close());
+  const plan = { apiUrl: serverUrl(server), organizationId: "gamedepartment", gameId: "42", token: "tf_test" };
+  const map = {
+    levelId: "factory",
+    imagePath,
+    imageFilename: "factory.png",
+    imageMimeType: "image/png",
+    bounds: { centerX: 0, centerZ: 0, sizeX: 200, sizeZ: 200 },
+    horizontalAxis: "x",
+    verticalAxis: "z",
+    worldUnitsPerMeter: null
+  };
+
+  const inherited = await uploadMap(plan, map, { log: () => {} });
+  const overridden = await uploadMap(plan, { ...map, worldUnitsPerMeter: 50 }, { log: () => {} });
+
+  assert.equal("world_units_per_meter" in payloads[0], false, "An unset scale lets the server use the game's");
+  assert.equal(inherited.worldUnitsPerMeter, 100);
+  assert.equal(payloads[1].world_units_per_meter, 50);
+  assert.equal(overridden.worldUnitsPerMeter, 50);
+});
+
+test("readMapInputs passes the world units per meter input through", () => {
+  const inputs = readMapInputs({
+    "INPUT_API-TOKEN": "tf_test",
+    "INPUT_GAME-ID": "42",
+    "INPUT_LEVEL-ID": "factory",
+    INPUT_IMAGE: "factory.png",
+    INPUT_BOUNDS: "0,0,200,200",
+    "INPUT_WORLD-UNITS-PER-METER": "100"
+  });
+
+  assert.equal(inputs.worldUnitsPerMeter, "100");
+  assert.equal(readMapInputs({
+    "INPUT_API-TOKEN": "tf_test",
+    "INPUT_GAME-ID": "42",
+    "INPUT_LEVEL-ID": "factory",
+    INPUT_IMAGE: "factory.png",
+    INPUT_BOUNDS: "0,0,200,200"
+  }).worldUnitsPerMeter, undefined);
 });
 
 test("readMapInputs assembles bounds from four scalar inputs", () => {
