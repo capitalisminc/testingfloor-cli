@@ -470,12 +470,12 @@ async function hashFile(filePath) {
 var RETRYABLE_STATUSES = /* @__PURE__ */ new Set([408, 429]);
 var TransientRequestError = class extends Error {
 };
-async function postJson(url, token, body, { retryDelaysMs = [] } = {}) {
+async function postJson(url, token, body, { retryDelaysMs = [], headers = {} } = {}) {
   return withRequestRetries(
     retryDelaysMs,
     () => requestJson(url, token, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...headers },
       body: JSON.stringify(compact(body))
     })
   );
@@ -484,14 +484,19 @@ async function requestJson(url, token, { method, headers = {}, body }) {
   let response;
   let text;
   try {
-    response = await fetch(url, { method, headers: { "Authorization": `Bearer ${token}`, ...headers }, body });
+    response = await fetch(url, { method, headers: { "Authorization": `Bearer ${token}`, "TestingFloor-Api-Version": "1", ...headers }, body });
     text = await response.text();
   } catch (error) {
     throw new TransientRequestError(`couldn't reach ${url}: ${error.cause?.code ?? error.cause?.message ?? error.message}`);
   }
   if (!response.ok) {
     const message = jsonError(text) || `${response.status} ${response.statusText} from ${url}`;
-    const transient = response.status >= 500 || RETRYABLE_STATUSES.has(response.status);
+    let retryable;
+    try {
+      retryable = JSON.parse(text)?.retryable;
+    } catch {
+    }
+    const transient = typeof retryable === "boolean" ? retryable : response.status >= 500 || RETRYABLE_STATUSES.has(response.status);
     throw transient ? new TransientRequestError(message) : new Error(message);
   }
   return text ? parseJsonResponse(text, url) : {};

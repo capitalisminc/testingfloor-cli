@@ -1,5 +1,5 @@
 name: Upload Testing Floor build
-description: Upload a ready-to-run game build folder to Testing Floor.
+description: Upload a game build folder or existing ZIP archive to Testing Floor.
 author: Capitalism Inc.
 
 inputs:
@@ -22,17 +22,19 @@ inputs:
   branch:
     description: "Branch key on the game to upload this build to (e.g. \"unity-main\", \"ue-main\"). Defaults to the game's default branch. Unknown keys are rejected."
     required: false
-  archive:
-    description: Removed. Set build-directory to the unzipped build folder.
-    required: false
-    deprecationMessage: The archive input was removed. Set build-directory to the unzipped build folder.
   archive-kind:
     description: No longer used. Every upload sends chunks for desktop installs, updates and zip downloads.
     required: false
     deprecationMessage: archive-kind is no longer used and can be removed. Every upload sends chunks for desktop installs, updates and zip downloads.
+  idempotency-key:
+    description: "Stable CI operation key for recovering retries; change for a new upload"
+    required: false
+  archive:
+    description: "Existing ZIP archive (choose this or build-directory)"
+    required: false
   build-directory:
-    description: The ready-to-run build folder. Uploaded as deduplicated chunks (only what changed since earlier builds) for desktop installs, updates and zip downloads.
-    required: true
+    description: The ready-to-run build folder, uploaded as deduplicated chunks. Choose this or archive.
+    required: false
   filename:
     description: Filename for the zip download.
     required: false

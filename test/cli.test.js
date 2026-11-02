@@ -23,7 +23,8 @@ import {
   uploadBuild,
   uploadMap,
   resolveTelemetryPlan,
-  telemetrySchema
+  telemetrySchema,
+  eventPresentation
 } from "../src/cli.js";
 import { readMapInputs } from "../src/action-map.js";
 
@@ -381,11 +382,10 @@ test("readInputs accepts GitHub's hyphenated action input environment names", ()
   assert.deepEqual(inputs.sourceRef, { run_id: "123" });
 });
 
-test("readInputs explains that the archive input was removed", () => {
-  assert.throws(
-    () => readInputs({ "INPUT_API-TOKEN": "tf", "INPUT_ARCHIVE": "game.zip" }),
-    /archive input was removed/
-  );
+test("readInputs accepts existing ZIP archives and rejects ambiguous sources", () => {
+  const env = { "INPUT_API-TOKEN": "example-token", INPUT_ARCHIVE: "game.zip", "INPUT_GAME-ID": "my-game", INPUT_PLATFORM: "windows", INPUT_VERSION: "1.2.3", "INPUT_LAUNCH-PATH": "Game.exe" };
+  assert.equal(readInputs(env).buildDirectory, "game.zip");
+  assert.throws(() => readInputs({ ...env, "INPUT_BUILD-DIRECTORY": "game" }), /either build-directory or archive/);
 });
 
 
@@ -571,14 +571,14 @@ test("uploadBuild never completes a build whose chunks failed verification", asy
   assert.equal(state.order.some((request) => request.endsWith("/complete")), false);
 });
 
-test("uploadBuild refuses a zip file where a build folder is expected", async () => {
+test("uploadBuild rejects unsupported file sources before requesting an upload", async () => {
   const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
-  const zip = path.join(cwd, "game.zip");
-  await writeFile(zip, "zip bytes");
+  const zip = path.join(cwd, "game.tar");
+  await writeFile(zip, "archive bytes");
 
   await assert.rejects(
     uploadBuild({ apiUrl: "http://127.0.0.1:1", organizationId: "org", gameId: "42", token: "tf" }, { buildDirectory: zip, platform: "windows" }, { log: () => {} }),
-    /must be a folder/
+    /folder or a ZIP/
   );
 });
 
@@ -1124,7 +1124,7 @@ test("uploadBuild retries announcing chunks and sending the manifest after a ser
   assert.ok(state.manifest, "the manifest arrives on the retry");
 });
 
-test("uploadBuild doesn't retry creating a build or a request Testing Floor refused", async (t) => {
+test("uploadBuild retries idempotent creation and stops on rejected requests", async (t) => {
   const { cwd, buildDir } = await smallBuild();
   const created = chunkDeliveryServer({
     manifestStatuses: [{ status: "verified" }],
@@ -1133,8 +1133,8 @@ test("uploadBuild doesn't retry creating a build or a request Testing Floor refu
   await listen(created.server);
   t.after(() => created.server.close());
 
-  await assert.rejects(chunkDeliveryUpload(created.server, cwd, buildDir), /503 Service Unavailable/);
-  assert.equal(created.state.requests["POST /api/organizations/gamedepartment/games/42/builds"], 1, "a retry could create a second build");
+  await chunkDeliveryUpload(created.server, cwd, buildDir);
+  assert.equal(created.state.requests["POST /api/organizations/gamedepartment/games/42/builds"], 2);
 
   const refused = chunkDeliveryServer({ manifestStatuses: [{ status: "verified" }], failures: { "POST /api/game_builds/8/chunks": [422] } });
   await listen(refused.server);
@@ -1180,4 +1180,119 @@ test("telemetry schema uses authenticated GET and PATCH on the org-qualified API
     assert.equal(requests[0].body, null);
     assert.deepEqual(requests[1].body, { schema_config: plan.schemaConfig, mode: "merge" });
   } finally { await new Promise(resolve => server.close(resolve)); }
+});
+
+
+test("ZIP uploads recover lost create and complete replies with one logical upload", async (t) => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  const source = Buffer.from("example ZIP bytes");
+  const zip = path.join(cwd, "game.zip");
+  await writeFile(zip, source);
+  const keys = [];
+  const createBodies = [];
+  const completeBodies = [];
+  let uploaded;
+  const server = http.createServer(async (req, res) => {
+    const body = await readRequestBody(req, { binary: true });
+    if (req.url === "/blob") {
+      uploaded = body;
+      res.end();
+      return;
+    }
+    assert.equal(req.headers["testingfloor-api-version"], "1");
+    if (req.url.endsWith("/builds")) {
+      keys.push(req.headers["idempotency-key"]);
+      createBodies.push(JSON.parse(body));
+      if (keys.length === 1) return req.socket.destroy();
+      return writeJson(res, 201, { id: 8, signed_id: "example-signed-id", upload_strategy: "direct", upload_url: `${serverUrl(server)}/blob` });
+    }
+    if (req.url.endsWith("/complete")) {
+      completeBodies.push(JSON.parse(body));
+      if (completeBodies.length === 1) return req.socket.destroy();
+      return writeJson(res, 200, { id: 8, status: "ready" });
+    }
+    writeJson(res, 404, {});
+  });
+  await listen(server);
+  t.after(() => server.close());
+  const plan = { apiUrl: serverUrl(server), organizationId: "example-studio", gameId: "my-game", token: "example-token", idempotencyKey: "ci-run-example" };
+  const result = await uploadBuild(plan, { buildDirectory: zip, filename: "game.zip", platform: "windows", version: "1.2.3" }, { log: () => {}, retryDelaysMs: [0] });
+  assert.equal(result.buildId, 8);
+  assert.deepEqual(uploaded, source);
+  assert.equal(createBodies[0].archive_kind, "zip");
+  assert.equal(createBodies[0].checksum_md5, createHash("md5").update(source).digest("base64"));
+  assert.deepEqual(createBodies[0], createBodies[1]);
+  assert.ok(keys[0]);
+  assert.equal(keys[0], keys[1]);
+  assert.deepEqual(completeBodies, [{ signed_id: "example-signed-id" }, { signed_id: "example-signed-id" }]);
+});
+
+test("event presentation uses its own versioned resource and payload", async (t) => {
+  const requests = [];
+  const server = http.createServer(async (req, res) => {
+    requests.push({ url: req.url, method: req.method, version: req.headers["testingfloor-api-version"], body: await readRequestBody(req) });
+    writeJson(res, 200, { presentation_config: { topline_keys: ["score"] } });
+  });
+  await listen(server);
+  t.after(() => server.close());
+  const plan = { apiUrl: serverUrl(server), organizationId: "example-studio", gameId: "my-game", token: "example-token", schemaConfig: { topline_keys: ["score"] }, mode: "replace" };
+  await eventPresentation(plan);
+  await eventPresentation(plan, { update: true });
+  assert.deepEqual(requests.map(r => r.method), ["GET", "PATCH"]);
+  assert.equal(requests[0].url, "/api/organizations/example-studio/games/my-game/analytics/event-presentation");
+  assert.equal(requests[1].version, "1");
+  assert.deepEqual(JSON.parse(requests[1].body), { presentation_config: plan.schemaConfig, mode: "replace" });
+});
+
+test("replayed builds reject failed states and distinguish branches", async (t) => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  const zip = path.join(cwd, "game.zip");
+  await writeFile(zip, "example ZIP");
+  const requests = [];
+  let replayStatus = "failed";
+  const server = http.createServer(async (req, res) => {
+    requests.push({ key: req.headers["idempotency-key"], body: JSON.parse(await readRequestBody(req)) });
+    writeJson(res, 201, { id: 8, status: replayStatus });
+  });
+  await listen(server);
+  t.after(() => server.close());
+  const plan = { apiUrl: serverUrl(server), organizationId: "example-studio", gameId: "my-game", token: "example-token", idempotencyKey: "example-run" };
+  const build = { buildDirectory: zip, filename: "game.zip", platform: "windows", version: "1.2.3", branch: "release" };
+  for (const status of ["failed", "archived", "processing"]) {
+    replayStatus = status;
+    await assert.rejects(uploadBuild(plan, build, { log: () => {} }), new RegExp(`cannot resume from status ${status}`));
+  }
+  replayStatus = "ready";
+  assert.equal((await uploadBuild(plan, build, { log: () => {} })).status, "ready");
+  await uploadBuild(plan, { ...build, branch: "preview" }, { log: () => {} });
+  assert.equal(requests[0].key, requests[3].key);
+  assert.notEqual(requests[3].key, requests[4].key);
+});
+
+test("ZIP multipart upload sends exact byte ranges and completion ETags", async (t) => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  const source = Buffer.from("example ZIP bytes");
+  const zip = path.join(cwd, "game.zip");
+  await writeFile(zip, source);
+  const received = [];
+  let completed;
+  const server = http.createServer(async (req, res) => {
+    const body = await readRequestBody(req, { binary: true });
+    if (req.url.startsWith("/part/")) {
+      received.push(body);
+      res.setHeader("ETag", `"etag-${req.url.split("/").pop()}"`);
+      return res.end();
+    }
+    if (req.url.endsWith("/builds")) {
+      return writeJson(res, 201, { id: 8, signed_id: "example-signed-id", upload_strategy: "multipart", multipart_upload: { upload_id: "example-upload", part_size: 8, parts: [1, 2, 3].map(n => ({ part_number: n, upload_url: `${serverUrl(server)}/part/${n}` })) } });
+    }
+    completed = JSON.parse(body);
+    writeJson(res, 200, { id: 8, status: "ready" });
+  });
+  await listen(server);
+  t.after(() => server.close());
+  await uploadBuild({ apiUrl: serverUrl(server), organizationId: "example-studio", gameId: "my-game", token: "example-token" }, { buildDirectory: zip, filename: "game.zip", platform: "windows" }, { log: () => {} });
+  assert.deepEqual(received.map(b => b.length), [8, 8, 1]);
+  assert.deepEqual(Buffer.concat(received), source);
+  assert.deepEqual(completed.multipart_upload, { upload_id: "example-upload", parts: [1, 2, 3].map(n => ({ part_number: n, etag: `"etag-${n}"` })) });
 });

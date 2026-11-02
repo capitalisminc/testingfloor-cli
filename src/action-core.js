@@ -18,6 +18,7 @@ export async function runAction(env = process.env, cwd = process.cwd()) {
       filename: build.filename,
       gameId: inputs.gameId,
       gitSha: inputs.gitSha,
+      idempotencyKey: inputs.idempotencyKey,
       launchArg: build.launchArgs,
       launchPath: build.launchPath,
       organizationId: inputs.organizationId,
@@ -39,18 +40,18 @@ export async function runAction(env = process.env, cwd = process.cwd()) {
   writeOutput("size-bytes", result.sizeBytes, env);
 }
 
-// archive-kind is still declared (deprecated) so old workflows only get a
-// warning; its value no longer matters.
 export function readInputs(env) {
-  if (input(env, "archive")) {
-    throw new Error("The archive input was removed. Set build-directory to the unzipped build folder.");
-  }
+  const buildDirectory = input(env, "build-directory");
+  const archive = input(env, "archive");
+  if (buildDirectory && archive) throw new Error("Choose either build-directory or archive.");
+  if (!buildDirectory && !archive) throw new Error("Set build-directory or archive.");
 
   return {
     apiToken: requiredInput(env, "api-token"),
     apiUrl: input(env, "api-url") || "https://api.testingfloor.com",
     branch: input(env, "branch") || undefined,
-    buildDirectory: requiredInput(env, "build-directory"),
+    buildDirectory: buildDirectory || archive,
+    idempotencyKey: input(env, "idempotency-key") || (env.GITHUB_RUN_ID ? `github:${env.GITHUB_REPOSITORY}:${env.GITHUB_RUN_ID}:${env.GITHUB_JOB}` : undefined),
     description: input(env, "description") ?? undefined,
     filename: input(env, "filename"),
     gameId: requiredInput(env, "game-id"),
