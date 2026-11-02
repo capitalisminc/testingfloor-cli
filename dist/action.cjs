@@ -265,6 +265,9 @@ async function readSavedLogin(env = import_node_process2.default.env) {
 var MAX_WAIT_MS = 15 * 60 * 1e3;
 var REQUEST_TIMEOUT_MS = 30 * 1e3;
 
+// src/recordings.js
+var CHUNK_SIZE = 8 * 1024 * 1024;
+
 // src/cli.js
 var DEFAULT_API_URL = "https://api.testingfloor.com";
 var DESCRIPTION_MAX_LENGTH = 1e3;

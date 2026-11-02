@@ -10,6 +10,7 @@ import process from "node:process";
 import { chunkBuildDirectory, readObject } from "./chunks.js";
 import { readSavedLogin } from "./credentials.js";
 import { login, logout, whoami } from "./login.js";
+import { prepareRecordingPlan, uploadRecordings } from "./recordings.js";
 
 const DEFAULT_API_URL = "https://api.testingfloor.com";
 const DESCRIPTION_MAX_LENGTH = 1000;
@@ -32,6 +33,7 @@ const VALUE_OPTIONS = new Set([
   "config",
   "description",
   "filename",
+  "file",
   "game-id",
   "git-sha",
   "horizontal-axis",
@@ -43,16 +45,22 @@ const VALUE_OPTIONS = new Set([
   "map-version",
   "organization-id",
   "platform",
+  "playtest-id",
+  "recorded-at",
   "source-ref-json",
   "schema",
   "mode",
   "token",
+  "tester-id",
+  "tester-name",
+  "tester-email",
   "default-variant",
   "variant",
   "variant-key",
   "version",
   "vertical-axis",
   "working-directory",
+  "written-feedback",
   "world-units-per-meter"
 ]);
 const REMOVED_OPTIONS = {
@@ -106,6 +114,27 @@ export async function main(argv = process.argv.slice(2), env = process.env, cwd 
     return;
   }
 
+  if (["upload-recording", "upload-recordings"].includes(parsed.command)) {
+    const plan = await resolveRecordingPlan(parsed.options, env, cwd);
+    const controller = new AbortController();
+    const cancel = () => controller.abort(new Error("Upload cancelled"));
+    process.once("SIGINT", cancel);
+    process.once("SIGTERM", cancel);
+    try {
+      const recordings = await uploadRecordings(plan, {
+        log: parsed.options.json ? () => {} : deps.log ?? console.error,
+        signal: controller.signal
+      });
+      const output = JSON.stringify({ recordings }, null, 2);
+      if (deps.print) deps.print(output);
+      else process.stdout.write(`${output}\n`);
+    } finally {
+      process.removeListener("SIGINT", cancel);
+      process.removeListener("SIGTERM", cancel);
+    }
+    return;
+  }
+
   if (["get-event-presentation", "set-event-presentation"].includes(parsed.command)) {
     const plan = await resolveTelemetryPlan({ ...parsed.options, schema: parsed.options.presentation }, env, cwd);
     const updating = parsed.command === "set-event-presentation";
@@ -129,6 +158,28 @@ export async function main(argv = process.argv.slice(2), env = process.env, cwd 
   }
 
   throw new Error(`Unknown command "${parsed.command}". Run "testingfloor help".`);
+}
+
+export async function resolveRecordingPlan(options, env = {}, cwd = process.cwd()) {
+  const configPath = options.config ? path.resolve(cwd, options.config) : null;
+  const config = configPath ? await readJson(configPath) : {};
+  const apiUrl = normalizeApiUrl(firstPresent(options.apiUrl, env.TESTING_FLOOR_API_URL, config.apiUrl, DEFAULT_API_URL));
+  const file = firstPresent(options.file, config.file);
+  return prepareRecordingPlan({
+    apiUrl,
+    token: await resolveToken({ options, env, config, apiUrl }),
+    organizationId: firstPresent(options.organizationId, env.TESTING_FLOOR_ORGANIZATION_ID, config.organizationId),
+    gameId: firstPresent(options.gameId, env.TESTING_FLOOR_GAME_ID, config.gameId),
+    playtestId: firstPresent(options.playtestId, env.TESTING_FLOOR_PLAYTEST_ID, config.playtestId),
+    file: file ? path.resolve(options.file ? cwd : configPath ? path.dirname(configPath) : cwd, file) : undefined,
+    testerId: firstPresent(options.testerId, config.testerId),
+    testerName: firstPresent(options.testerName, config.testerName),
+    testerEmail: firstPresent(options.testerEmail, config.testerEmail),
+    recordedAt: firstPresent(options.recordedAt, config.recordedAt),
+    writtenFeedback: firstPresent(options.writtenFeedback, config.writtenFeedback),
+    version: firstPresent(options.version, env.TESTING_FLOOR_VERSION, config.version),
+    idempotencyKey: options.idempotencyKey ?? config.idempotencyKey
+  });
 }
 
 export async function resolveTelemetryPlan(options, env = {}, cwd = process.cwd()) {
@@ -1238,6 +1289,8 @@ Usage:
   testingfloor upload-build --config testingfloor-builds.json
   testingfloor upload-map --organization-id gamedepartment --game-id 42 --level-id factory --image ./maps/factory.png --bounds 0,0,200,200
   testingfloor upload-map --config testingfloor-maps.json
+  testingfloor upload-recording --playtest-id 123 --file ./gameplay.mp4 --tester-name "Playtester"
+  testingfloor upload-recording --organization-id example-studio --game-id my-game --file ./recordings --tester-name "Playtester"
   testingfloor get-event-presentation --organization-id example-studio --game-id my-game
   testingfloor set-event-presentation --organization-id example-studio --game-id my-game --presentation event-presentation.json
   testingfloor get-telemetry-schema --organization-id example-studio --game-id my-game
@@ -1259,6 +1312,7 @@ Environment:
                                 ($XDG_CONFIG_HOME/testingfloor, or %APPDATA%\\testingfloor on Windows)
   TESTING_FLOOR_ORGANIZATION_ID Organization slug or numeric id
   TESTING_FLOOR_GAME_ID         Numeric game id
+  TESTING_FLOOR_PLAYTEST_ID     Playtest for recording uploads
   TESTING_FLOOR_VERSION         Build version / map app_version metadata
   TESTING_FLOOR_DESCRIPTION     Optional build description (up to 1000 characters)
   TESTING_FLOOR_MAP_VERSION     Telemetry map version number
@@ -1294,6 +1348,20 @@ Map options:
                             Override the game's world units per meter for this map.
                             Leave unset so the map uses the game's setting
 
+Recording options:
+  --file <path>            Video file, or folder of videos (searched recursively)
+  --playtest-id <id>       Named playtest; otherwise use --organization-id and --game-id
+  --tester-id <id>         Existing tester; or provide a name/email below
+  --tester-name <name>     Who played (applies to every video in a folder)
+  --tester-email <email>   Tester email, optionally with --tester-name
+  --recorded-at <time>     ISO 8601 recording time, including timezone
+  --written-feedback <text> Feedback from the tester
+  --version <version>     Recorded game version
+  --idempotency-key <key>  Optional batch key; change to intentionally import again
+
+  Recording uploads require uploads:create. Run login again if an older
+  saved login lacks it. Rerun the same command to resume without duplicates.
+
 Telemetry schema options:
   --presentation <path>    JSON event styling (set-event-presentation)
   --schema <path>          JSON field mappings to apply (set-telemetry-schema)
@@ -1304,7 +1372,7 @@ Common options:
   --token <token>           API token
   --organization-id <id>    Organization slug or numeric id
   --game-id <id>            Numeric Testing Floor game id
-  --config, -c <path>       JSON config with builds, platforms, or maps
+  --config, -c <path>       JSON config for builds, maps, or recording uploads
   --json                    Print only JSON results
 `;
 }

@@ -1,8 +1,8 @@
 # Testing Floor CLI
 
-Small Node CLI for uploading game artifacts to Testing Floor.
+Small Node CLI for uploading game builds, level maps and gameplay recordings to Testing Floor.
 
-It currently handles two artifact types: **builds** (ready-to-run game folders) and **maps** (top-down level images plus their world-space bounds, used to render heatmaps and event overlays).
+**Builds** are ready-to-run game folders. **Maps** are top-down level images with world-space bounds for heatmaps and event overlays. **Recordings** are existing gameplay videos, such as footage captured with OBS or exported from Steam Recording.
 
 ## Install
 
@@ -35,6 +35,49 @@ In CI, don't sign in. Store an API token as a secret and pass it as `TESTING_FLO
 Commands use the first token they find: `--token`, then `TESTING_FLOOR_API_TOKEN`, then `token` in a `--config` file, then the saved login. The saved login is only sent to the API URL it was issued for.
 
 The login is saved in `credentials.json`, which only you can read, in `$XDG_CONFIG_HOME/testingfloor` (by default `~/.config/testingfloor`), or in `%APPDATA%\testingfloor` on Windows. Set `TESTING_FLOOR_CONFIG_DIR` to keep it in a different folder.
+
+## Upload recordings
+
+Upload a video to a named playtest:
+
+```sh
+testingfloor upload-recording \
+  --playtest-id 123 \
+  --file ./gameplay.mp4 \
+  --tester-name "Example player"
+```
+
+Or upload a folder to a game's **Ongoing recordings**:
+
+```sh
+testingfloor upload-recording \
+  --organization-id example-studio \
+  --game-id my-game \
+  --file ./recordings \
+  --tester-email player@example.com
+```
+
+The API key needs `uploads:create`, and its owner must be able to manage the destination's playtests. Run `testingfloor login` again if your saved login predates recording uploads, or supply a key with that permission. Previously issued keys keep their existing permissions.
+
+`--file` accepts a single video or a folder searched recursively. Each video becomes one recording. Common video extensions include MP4, MKV, MOV, WebM, AVI and M4V; hidden files, symbolic links and non-video sidecars are skipped in folders. Export Steam recordings to video files first. Videos are uploaded as-is, without transcoding or joining clips.
+
+Identify the person who played with `--tester-name`, `--tester-email`, or `--tester-id` for an existing tester. You may combine name and email. A folder uses the same tester for every video; upload different testers' footage separately.
+
+Optional metadata:
+
+- `--version 1.2.3`: the recorded game version.
+- `--recorded-at 2026-01-01T12:00:00Z`: when the gameplay was recorded, including its timezone.
+- `--written-feedback "The menu was hard to find"`: the tester's feedback.
+
+These values apply to every video in a folder. They can also be supplied in a JSON file using `--config`, with camelCase fields such as `file`, `playtestId`, `testerName`, `recordedAt` and `writtenFeedback`. Configured file paths are relative to the config file; `--file` is relative to the current directory. `TESTING_FLOOR_PLAYTEST_ID` supplies the playtest when the flag is omitted. Choose either a playtest or an organization/game destination.
+
+### Resume an interrupted recording upload
+
+Rerun the same command with the same API key. The CLI hashes each file and reuses the import for the same bytes, local file path, destination and metadata. It checks the upload server's confirmed byte range and sends the remaining bytes. Completed imports are reused, including when a completion response was lost. Expired uploads recover through Testing Floor using the same recording.
+
+Keep the source files unchanged and in the same location until uploading finishes. Changing their path, bytes or metadata starts a different import. To deliberately import the same footage again, pass a new `--idempotency-key`, such as `--idempotency-key second-import`. In a folder, this is a batch key; each video still gets a distinct request key.
+
+Progress goes to stderr. Results on stdout contain `recording_id`, `video_id`, `status_url` and the local filename for each video; `--json` suppresses progress. `uploaded` means the video transfer finished. Playback, transcripts and insights continue processing in Testing Floor. If a batch stops, earlier uploads remain available and rerunning reuses them.
 
 ## Single Build
 
