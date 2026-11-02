@@ -23,6 +23,10 @@ export function readMapInputs(env) {
   return {
     apiUrl: input(env, "api-url") || undefined,
     appVersion: input(env, "app-version") || undefined,
+    buildId: input(env, "build-id") || undefined,
+    correctsMapId: input(env, "corrects-map-id") || undefined,
+    correctionReason: input(env, "correction-reason") || undefined,
+    applyToHistory: input(env, "apply-to-history") || undefined,
     bounds: boundsFromInputs(env),
     gameId: requiredInput(env, "game-id"),
     horizontalAxis: input(env, "horizontal-axis") || undefined,

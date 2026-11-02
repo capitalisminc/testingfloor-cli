@@ -46,7 +46,19 @@ inputs:
     required: false
     default: "z"
   app-version:
-    description: App version associated with this map snapshot. Used for telemetry-map versioning.
+    description: Human-readable app version. Legacy integrations use it as a map-routing fallback.
+    required: false
+  build-id:
+    description: Immutable artifact ID matching the SDK and build upload.
+    required: false
+  corrects-map-id:
+    description: Existing map revision to correct explicitly.
+    required: false
+  correction-reason:
+    description: Required explanation for a map correction.
+    required: false
+  apply-to-history:
+    description: Set true to deliberately update saved historical map selections. Future-only corrections require a new build-id.
     required: false
   map-version:
     description: Telemetry map version number to update. Defaults to the latest pinned/server-selected version.

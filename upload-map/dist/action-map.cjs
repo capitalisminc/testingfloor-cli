@@ -177,9 +177,10 @@ async function resolveMapPlan(options, env = {}, cwd = import_node_process3.defa
     config.mapVersion,
     config.map_version
   );
+  const buildIdentifier = firstPresent(options.buildId, env.TESTING_FLOOR_BUILD_ID, config.buildId, config.build_id);
   const rawMaps = cliMapRequested ? [mapFromOptions(options)] : configuredMaps;
   const maps = rawMaps.map(
-    (map) => normalizeMap(map, { configDir, cwd, commonAppVersion: appVersion, commonMapVersion: mapVersion })
+    (map) => normalizeMap(map, { configDir, cwd, commonAppVersion: appVersion, commonMapVersion: mapVersion, commonBuildIdentifier: buildIdentifier })
   );
   validateMapPlan({ organizationId, gameId, maps });
   return {
@@ -244,6 +245,10 @@ async function uploadMap(plan, map, { log = console.error } = {}) {
     map_horizontal_axis: map.horizontalAxis,
     map_vertical_axis: map.verticalAxis,
     app_version: map.appVersion || void 0,
+    build_id: map.buildIdentifier ?? void 0,
+    corrects_map_id: map.correctsMapId ?? void 0,
+    correction_reason: map.correctionReason ?? void 0,
+    apply_to_history: map.applyToHistory ?? void 0,
     variant_key: map.variantKey || void 0,
     version: map.version || void 0,
     default_variant: map.defaultVariant === null || map.defaultVariant === void 0 ? void 0 : map.defaultVariant,
@@ -256,6 +261,7 @@ async function uploadMap(plan, map, { log = console.error } = {}) {
     version: response.version ?? map.version ?? null,
     pinned: response.pinned ?? null,
     appVersion: response.app_version ?? map.appVersion ?? null,
+    buildIdentifier: response.build_id ?? map.buildIdentifier ?? null,
     variantKey: response.variant_key ?? map.variantKey ?? null,
     variantLabel: response.variant_label ?? null,
     defaultVariant: response.default_variant ?? map.defaultVariant ?? null,
@@ -275,13 +281,17 @@ function mapFromOptions(options) {
     horizontalAxis: options.horizontalAxis,
     verticalAxis: options.verticalAxis,
     appVersion: options.appVersion,
+    buildId: options.buildId,
+    correctsMapId: options.correctsMapId,
+    correctionReason: options.correctionReason,
+    applyToHistory: options.applyToHistory,
     variantKey: options.variantKey ?? options.variant,
     mapVersion: options.mapVersion,
     defaultVariant: options.defaultVariant,
     worldUnitsPerMeter: options.worldUnitsPerMeter
   };
 }
-function normalizeMap(map, { configDir, cwd, commonAppVersion, commonMapVersion }) {
+function normalizeMap(map, { configDir, cwd, commonAppVersion, commonMapVersion, commonBuildIdentifier }) {
   const image = map.image ?? map.path;
   const imagePath = image ? resolveBuildPath(image, map.fromConfig === false ? cwd : configDir) : null;
   const bounds = parseBoundsString(map.bounds);
@@ -296,6 +306,10 @@ function normalizeMap(map, { configDir, cwd, commonAppVersion, commonMapVersion 
     horizontalAxis: (map.horizontalAxis ?? map.map_horizontal_axis ?? "x").toLowerCase(),
     verticalAxis: (map.verticalAxis ?? map.map_vertical_axis ?? "z").toLowerCase(),
     appVersion: map.appVersion ?? map.app_version ?? commonAppVersion ?? null,
+    buildIdentifier: optionalBuildIdentifier(map.buildId ?? map.build_id ?? commonBuildIdentifier),
+    correctsMapId: optionalPositiveInteger(map.correctsMapId ?? map.corrects_map_id, "map.correctsMapId"),
+    correctionReason: optionalString(map.correctionReason ?? map.correction_reason),
+    applyToHistory: optionalBoolean(map.applyToHistory ?? map.apply_to_history, "map.applyToHistory"),
     variantKey: optionalString(map.variantKey ?? map.variant_key ?? map.variant),
     version: optionalPositiveInteger(map.mapVersion ?? map.map_version ?? map.version ?? commonMapVersion, "map.version"),
     defaultVariant: optionalBoolean(map.defaultVariant ?? map.default_variant, "map.defaultVariant"),
@@ -316,6 +330,13 @@ function validateMapPlan(plan) {
     throw new Error("No maps configured. Pass --level-id/--image/--bounds or provide config maps.");
   }
   for (const map of plan.maps) {
+    if (map.correctsMapId && !map.correctionReason) throw new Error("Map corrections require --correction-reason.");
+    if (!map.correctsMapId && (map.correctionReason || map.applyToHistory !== null)) {
+      throw new Error("Correction reason and history choice require --corrects-map-id.");
+    }
+    if (map.correctsMapId && !map.applyToHistory && !map.buildIdentifier) {
+      throw new Error("Future-only map corrections require a new --build-id, or choose --apply-to-history true.");
+    }
     if (!map.levelId) {
       throw new Error("Missing levelId for map.");
     }
@@ -393,6 +414,13 @@ function optionalBoolean(value, name) {
     return false;
   }
   throw new Error(`${name} must be true or false.`);
+}
+function optionalBuildIdentifier(value) {
+  if (value === void 0 || value === null) return null;
+  if (typeof value !== "string" || value.trim() === "" || Array.from(value).length > 255) {
+    throw new Error("buildId must be nonblank text of at most 255 characters.");
+  }
+  return value;
 }
 function optionalString(value) {
   if (value === void 0 || value === null) {
@@ -621,6 +649,10 @@ function readMapInputs(env) {
   return {
     apiUrl: input(env, "api-url") || void 0,
     appVersion: input(env, "app-version") || void 0,
+    buildId: input(env, "build-id") || void 0,
+    correctsMapId: input(env, "corrects-map-id") || void 0,
+    correctionReason: input(env, "correction-reason") || void 0,
+    applyToHistory: input(env, "apply-to-history") || void 0,
     bounds: boundsFromInputs(env),
     gameId: requiredInput(env, "game-id"),
     horizontalAxis: input(env, "horizontal-axis") || void 0,
