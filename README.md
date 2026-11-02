@@ -59,7 +59,7 @@ Add `--description "Fixes input and updates the tutorial"` to include an optiona
 
 ## How builds are uploaded
 
-You point the CLI at the ready-to-run build folder; there's nothing else to choose. Each upload:
+For a ready-to-run build folder, each upload:
 
 1. Splits the folder into content-addressed chunks. Content defines the boundaries, so an edit inside a large file changes only nearby chunks. Small files are packed together.
 2. Uploads only chunks the game hasn't stored yet.
@@ -70,7 +70,7 @@ Uploads need only Node.js. No external patch tool is required. If chunk verifica
 
 The first upload sends the whole build, uncompressed; later builds send only what changed.
 
-Requests that are safe to repeat are retried when the connection drops or Testing Floor answers with a server error: chunk uploads, the chunk and manifest requests, and status checks. Waiting for verification keeps going through failed checks until its 45-minute limit. Creating and completing a build aren't retried, because repeating them could make a second build or fail on one that already finished.
+Creation uses an idempotency key and completion is repeatable. The CLI retries ambiguous responses along with chunk, manifest and status requests, and respects versioned non-retryable errors. Waiting for verification continues through temporary failures until its deadline. See [retry recovery](#versioned-api-and-retry-recovery) for recovery across CLI invocations.
 
 ## Multiple Platforms
 
@@ -119,7 +119,7 @@ Use this repository directly as a GitHub Action:
 
 ```yaml
 - name: Upload build to Testing Floor
-  uses: capitalisminc/testingfloor-cli@main
+  uses: capitalisminc/testingfloor-cli@b65ab66674096e5d1c3a0f8b3f73b0f24026f506
   with:
     api-token: ${{ secrets.TF_BUILD_UPLOAD_TOKEN }}
     organization-id: ${{ vars.TF_ORGANIZATION_ID }}
@@ -140,7 +140,7 @@ Use this repository directly as a GitHub Action:
 
 `build-directory` is the ready-to-run build folder; see [How builds are uploaded](#how-builds-are-uploaded).
 
-The old `archive` and `archive-kind` inputs are no longer used. `archive-kind` only produces a warning and can be deleted; `archive` (a zip file) fails, because only a folder can be uploaded as chunks.
+Choose `build-directory` for a ready-to-run folder or `archive` for an existing ZIP. Folder uploads use deduplicated chunks; ZIP inputs upload their existing bytes directly, including multipart transfer for large archives. ZIPs must contain the launch path at their root, without an extra enclosing folder. `archive-kind` is no longer needed; the source determines the format.
 
 You can also run the CLI directly:
 
@@ -151,7 +151,7 @@ You can also run the CLI directly:
     TESTING_FLOOR_VERSION: ${{ github.ref_name }}
     TESTING_FLOOR_GIT_SHA: ${{ github.sha }}
   run: |
-    npx @testingfloor/cli upload-build \
+    npx --yes --package=https://github.com/capitalisminc/testingfloor-cli/archive/b65ab66674096e5d1c3a0f8b3f73b0f24026f506.tar.gz testingfloor upload-build \
       --config testingfloor-builds.json \
       --source-ref run_id=${{ github.run_id }} \
       --source-ref run_number=${{ github.run_number }}
@@ -225,7 +225,7 @@ Image paths in a config file are resolved relative to that config file.
 
 ```yaml
 - name: Upload map to Testing Floor
-  uses: capitalisminc/testingfloor-cli/upload-map@main
+  uses: capitalisminc/testingfloor-cli/upload-map@b65ab66674096e5d1c3a0f8b3f73b0f24026f506
   with:
     api-token: ${{ secrets.TF_MAPS_TOKEN }}
     organization-id: ${{ vars.TF_ORGANIZATION_ID }}
@@ -267,7 +267,7 @@ Top-level:
 Build object:
 
 - `platform`: `windows`, `macos`, or `linux`.
-- `buildDirectory`: the ready-to-run build folder (`archive` and `path` are accepted as older names).
+- `buildDirectory`: a ready-to-run build folder or existing ZIP (`archive` and `path` remain accepted config names).
 - `launchPath`: executable path inside the build folder.
 - `launchArgs`: optional array, defaults to `[]`.
 - `workingDirectory`: optional working directory inside the build folder, defaults to `"."`.
@@ -339,3 +339,41 @@ npm publishes this package from GitHub Actions through trusted publishing, so no
 2. Push a tag for the merged commit, for example `git tag v1.2.3 && git push origin v1.2.3`.
 
 The tag starts the "Publish to npm" workflow, which runs the tests and publishes with provenance.
+
+
+## Versioned API and retry recovery
+
+This release sends `TestingFloor-Api-Version: 1` to the customer API at
+`https://api.testingfloor.com/api`. Deploy support for that version before upgrading.
+The CLI retries ambiguous create and completion responses. A create retry reuses
+one idempotency key, so it recovers the same build rather than creating another.
+
+To recover an upload across separate CLI invocations, pass `--idempotency-key`
+(or `TESTING_FLOOR_IDEMPOTENCY_KEY`). Keep it unchanged for retries of the same
+operation and change it for a new build. The content digest and upload metadata
+must match; reusing an operation key for different content fails. For Actions,
+the default includes repository, run ID and job; branch, platform and filename distinguish
+builds. Set the `idempotency-key` input explicitly for other matrix dimensions.
+
+## Event presentation
+
+Data mappings and event styling are separate resources. `--schema` describes how
+to interpret incoming data. `--presentation` controls event rules, common field
+prefixes and topline keys. Replacing either resource preserves the other.
+
+```sh
+testingfloor get-event-presentation --organization-id example-studio --game-id my-game
+testingfloor set-event-presentation --organization-id example-studio --game-id my-game --presentation event-presentation.json --mode replace
+```
+
+Both command groups require `telemetry:configure`. Their default update mode is
+`merge`; `replace` clears only the configuration owned by that resource.
+
++
++## Reproducible client versions
++
++The Actions and `npx` examples pin the same immutable implementation commit.
++They require customer API version 1. Upgrade by reviewing a released tag or commit,
++then replace every pin together. The package version prepared here is 0.4.0;
++the source pin works without assuming that version has been published to npm.
++

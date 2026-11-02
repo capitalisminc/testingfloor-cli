@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { access, mkdtemp, opendir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
@@ -36,6 +36,8 @@ const VALUE_OPTIONS = new Set([
   "git-sha",
   "horizontal-axis",
   "image",
+  "idempotency-key",
+  "presentation",
   "launch-path",
   "level-id",
   "map-version",
@@ -104,7 +106,19 @@ export async function main(argv = process.argv.slice(2), env = process.env, cwd 
     return;
   }
 
+  if (["get-event-presentation", "set-event-presentation"].includes(parsed.command)) {
+    const plan = await resolveTelemetryPlan({ ...parsed.options, schema: parsed.options.presentation }, env, cwd);
+    const updating = parsed.command === "set-event-presentation";
+    if (parsed.options.schema) throw new Error("Use --presentation for event styling, and --schema for data mappings.");
+    if (updating && !plan.schemaConfig) throw new Error("Missing --presentation JSON file.");
+    if (!updating && plan.schemaConfig) throw new Error("Use set-event-presentation to apply --presentation.");
+    const result = await eventPresentation(plan, { update: updating });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
   if (["get-telemetry-schema", "set-telemetry-schema"].includes(parsed.command)) {
+    if (parsed.options.presentation) throw new Error("Use set-event-presentation to apply --presentation.");
     const plan = await resolveTelemetryPlan(parsed.options, env, cwd);
     const updating = parsed.command === "set-telemetry-schema";
     if (updating && !plan.schemaConfig) throw new Error("Missing --schema JSON file.");
@@ -144,6 +158,14 @@ export async function telemetrySchema(plan, { update = false } = {}) {
     method: update ? "PATCH" : "GET",
     headers: update ? { "Content-Type": "application/json" } : {},
     body: update ? JSON.stringify({ schema_config: plan.schemaConfig, mode: plan.mode }) : undefined
+  });
+}
+
+export async function eventPresentation(plan, { update = false } = {}) {
+  return requestJson(gameApiUrl(plan, "/analytics/event-presentation"), plan.token, {
+    method: update ? "PATCH" : "GET",
+    headers: update ? { "Content-Type": "application/json" } : {},
+    body: update ? JSON.stringify({ presentation_config: plan.schemaConfig, mode: plan.mode }) : undefined
   });
 }
 
@@ -259,6 +281,7 @@ export async function resolveUploadPlan(options, env = {}, cwd = process.cwd()) 
     token,
     organizationId: String(organizationId),
     gameId: String(gameId),
+    idempotencyKey: firstPresent(options.idempotencyKey, env.TESTING_FLOOR_IDEMPOTENCY_KEY, config.idempotencyKey),
     builds
   };
 }
@@ -613,22 +636,59 @@ export function parseSourceRefEntries(entries) {
 
 // A build becomes available only after every referenced chunk is verified.
 export async function uploadBuild(plan, build, { log = console.error, pollIntervalMs, retryDelaysMs = REQUEST_RETRY_DELAYS_MS } = {}) {
-  const source = await pathInfo(build.buildDirectory, { allowDirectory: true, label: "Build directory" });
-  if (!(await stat(build.buildDirectory)).isDirectory()) {
-    throw new Error(`Build directory must be a folder, not a file: ${build.buildDirectory}`);
+  const source = await pathInfo(build.buildDirectory, { allowDirectory: true, label: "Build source" });
+  const directory = (await stat(build.buildDirectory)).isDirectory();
+  if (!directory && path.extname(build.buildDirectory).toLowerCase() !== ".zip") {
+    throw new Error("Build source must be a folder or a ZIP archive.");
   }
+  const chunks = directory ? await chunkBuildDirectory(build.buildDirectory) : null;
+  const hashes = directory ? null : await hashFile(build.buildDirectory);
+  const contentDigest = directory ? createHash("sha256").update(JSON.stringify(chunks.entries)).digest("hex") : hashes.sha256Hex;
+  const idempotencyKey = plan.idempotencyKey
+    ? createHash("sha256").update(JSON.stringify([plan.idempotencyKey, build.branch ?? null, build.platform, build.filename])).digest("hex")
+    : randomUUID();
   const created = await postJson(gameApiUrl(plan, "/builds"), plan.token, {
     platform: build.platform, branch: build.branch, version: build.version,
-    description: build.description, git_sha: build.gitSha, archive_kind: "chunks",
+    description: build.description, git_sha: build.gitSha, archive_kind: directory ? "chunks" : "zip",
     filename: build.filename, byte_size: source.size, launch_path: build.launchPath,
-    launch_args: build.launchArgs, working_directory: build.workingDirectory, source_ref: build.sourceRef
-  });
-  const manifest = await uploadChunkManifest(plan, created.id, build.buildDirectory, { log, pollIntervalMs, retryDelaysMs });
-  log(`Completing build ${created.id}`);
-  const completed = await postJson(`${plan.apiUrl}/api/game_builds/${created.id}/complete`, plan.token, {});
+    checksum_md5: hashes?.md5Base64,
+    launch_args: build.launchArgs, working_directory: build.workingDirectory,
+    source_ref: { ...build.sourceRef, content_sha256: contentDigest }
+  }, { retryDelaysMs, headers: { "Idempotency-Key": idempotencyKey } });
+  if (created.status && !["pending", "ready"].includes(created.status)) {
+    throw new Error(`Build ${created.id} cannot resume from status ${created.status}.`);
+  }
+  let manifest = {};
+  let completionBody = {};
+  if (!created.status || created.status === "pending") {
+    if (directory) {
+      manifest = await uploadChunkManifest(plan, created.id, build.buildDirectory, { log, pollIntervalMs, retryDelaysMs, chunks });
+    } else {
+      completionBody.signed_id = created.signed_id;
+      if (created.upload_strategy === "multipart") {
+        const multipart = created.multipart_upload;
+        const parts = [];
+        for (const part of multipart.parts) {
+          const start = (part.part_number - 1) * multipart.part_size;
+          const end = Math.min(source.size, start + multipart.part_size) - 1;
+          const headers = await withRetries(`Part ${part.part_number}`, () => uploadFile(part.upload_url, part.upload_headers ?? {}, build.buildDirectory, end - start + 1, { start, end }));
+          const etag = headerValue(headers, "etag");
+          if (!etag) throw new Error(`Part ${part.part_number} returned no ETag.`);
+          parts.push({ part_number: part.part_number, etag });
+        }
+        completionBody.multipart_upload = { upload_id: multipart.upload_id, parts };
+      } else {
+        await withRetries("ZIP upload", () => uploadFile(created.upload_url, created.upload_headers ?? {}, build.buildDirectory, source.size));
+      }
+    }
+    log(`Completing build ${created.id}`);
+  }
+  const completed = created.status && created.status !== "pending"
+    ? created
+    : await postJson(`${plan.apiUrl}/api/game_builds/${created.id}/complete`, plan.token, completionBody, { retryDelaysMs });
   return {
     buildId: completed.id ?? created.id, platform: build.platform, version: build.version,
-    gitSha: build.gitSha, filename: build.filename, checksumSha256: null,
+    gitSha: build.gitSha, filename: build.filename, checksumSha256: hashes?.sha256Hex ?? null,
     sizeBytes: source.size, status: completed.status ?? "ready", readyAt: completed.ready_at,
     zipSizeBytes: manifest.zip_size_bytes ?? null
   };
@@ -641,9 +701,9 @@ const MANIFEST_VERIFY_TIMEOUT_MS = 45 * 60 * 1000;
 // Uploads the build folder as chunks plus a manifest, then waits until
 // Testing Floor has verified every chunk and file checksum. Only chunks the
 // game hasn't stored before are uploaded.
-async function uploadChunkManifest(plan, buildId, buildDirectory, { log, pollIntervalMs = 5000, retryDelaysMs }) {
+async function uploadChunkManifest(plan, buildId, buildDirectory, { log, pollIntervalMs = 5000, retryDelaysMs, chunks }) {
   log(`Splitting ${buildDirectory} into chunks for zip downloads and recorder installs`);
-  const { entries, objects } = await chunkBuildDirectory(buildDirectory);
+  const { entries, objects } = chunks ?? await chunkBuildDirectory(buildDirectory);
   const objectList = [...objects.entries()];
   const totalBytes = objectList.reduce((sum, [, object]) => sum + object.size, 0);
   log(`${entries.length} entries in ${objectList.length} chunks (${formatBytes(totalBytes)})`);
@@ -778,7 +838,7 @@ function buildFromOptions(options) {
 }
 
 function normalizeBuild(build, { configDir, cwd, commonVersion, commonDescription, commonGitSha, commonSourceRef, commonBranch }) {
-  // archive and path are older names for the same folder.
+  // The source may be a build folder or an existing ZIP archive.
   const directory = build.buildDirectory ?? build.build_directory ?? build.archive ?? build.path;
 
   return {
@@ -937,13 +997,12 @@ const RETRYABLE_STATUSES = new Set([408, 429]);
 // failing. Repeating it may work; repeating any other 4xx won't.
 class TransientRequestError extends Error {}
 
-// POSTs don't retry unless the caller passes retryDelaysMs: only some are
-// safe to repeat (creating a build twice makes two builds).
-async function postJson(url, token, body, { retryDelaysMs = [] } = {}) {
+// Callers opt in only after establishing that repeating the operation is safe.
+async function postJson(url, token, body, { retryDelaysMs = [], headers = {} } = {}) {
   return withRequestRetries(retryDelaysMs, () =>
     requestJson(url, token, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...headers },
       body: JSON.stringify(compact(body))
     })
   );
@@ -957,7 +1016,7 @@ async function requestJson(url, token, { method, headers = {}, body }) {
   let response;
   let text;
   try {
-    response = await fetch(url, { method, headers: { "Authorization": `Bearer ${token}`, ...headers }, body });
+    response = await fetch(url, { method, headers: { "Authorization": `Bearer ${token}`, "TestingFloor-Api-Version": "1", ...headers }, body });
     text = await response.text();
   } catch (error) {
     throw new TransientRequestError(`couldn't reach ${url}: ${error.cause?.code ?? error.cause?.message ?? error.message}`);
@@ -965,7 +1024,9 @@ async function requestJson(url, token, { method, headers = {}, body }) {
 
   if (!response.ok) {
     const message = jsonError(text) || `${response.status} ${response.statusText} from ${url}`;
-    const transient = response.status >= 500 || RETRYABLE_STATUSES.has(response.status);
+    let retryable;
+    try { retryable = JSON.parse(text)?.retryable; } catch { /* Proxy errors may be HTML. */ }
+    const transient = typeof retryable === "boolean" ? retryable : response.status >= 500 || RETRYABLE_STATUSES.has(response.status);
     throw transient ? new TransientRequestError(message) : new Error(message);
   }
 
@@ -1177,6 +1238,8 @@ Usage:
   testingfloor upload-build --config testingfloor-builds.json
   testingfloor upload-map --organization-id gamedepartment --game-id 42 --level-id factory --image ./maps/factory.png --bounds 0,0,200,200
   testingfloor upload-map --config testingfloor-maps.json
+  testingfloor get-event-presentation --organization-id example-studio --game-id my-game
+  testingfloor set-event-presentation --organization-id example-studio --game-id my-game --presentation event-presentation.json
   testingfloor get-telemetry-schema --organization-id example-studio --game-id my-game
   testingfloor set-telemetry-schema --organization-id example-studio --game-id my-game --schema telemetry-schema.json
 
@@ -1204,6 +1267,8 @@ Environment:
 Build options:
   --platform <platform>     windows, macos, or linux
   --build-directory <path>  The ready-to-run build folder
+  --archive <path>          An existing ZIP archive
+  --idempotency-key <key>   Reuse for retries of the same CI upload; change for a new build
   --filename <name>         Name for the zip download, defaults to the folder name
   --version <version>       Version metadata
   --description <text>      Optional plain text, up to 1000 characters; website build list only
@@ -1230,6 +1295,7 @@ Map options:
                             Leave unset so the map uses the game's setting
 
 Telemetry schema options:
+  --presentation <path>    JSON event styling (set-event-presentation)
   --schema <path>          JSON field mappings to apply (set-telemetry-schema)
   --mode <merge|replace>   Merge mappings by default; replace removes unspecified mappings
 

@@ -55,6 +55,8 @@ function writeOutput(name, value, env) {
 }
 
 // src/cli.js
+var import_node_crypto2 = require("node:crypto");
+var import_node_fs3 = require("node:fs");
 var import_promises3 = require("node:fs/promises");
 var import_node_http = __toESM(require("node:http"), 1);
 var import_node_https = __toESM(require("node:https"), 1);
@@ -315,6 +317,7 @@ async function resolveUploadPlan(options, env = {}, cwd = import_node_process3.d
     token,
     organizationId: String(organizationId),
     gameId: String(gameId),
+    idempotencyKey: firstPresent(options.idempotencyKey, env.TESTING_FLOOR_IDEMPOTENCY_KEY, config.idempotencyKey),
     builds
   };
 }
@@ -342,34 +345,66 @@ function parseSourceRefEntries(entries) {
   }, {});
 }
 async function uploadBuild(plan, build, { log = console.error, pollIntervalMs, retryDelaysMs = REQUEST_RETRY_DELAYS_MS } = {}) {
-  const source = await pathInfo(build.buildDirectory, { allowDirectory: true, label: "Build directory" });
-  if (!(await (0, import_promises3.stat)(build.buildDirectory)).isDirectory()) {
-    throw new Error(`Build directory must be a folder, not a file: ${build.buildDirectory}`);
+  const source = await pathInfo(build.buildDirectory, { allowDirectory: true, label: "Build source" });
+  const directory = (await (0, import_promises3.stat)(build.buildDirectory)).isDirectory();
+  if (!directory && import_node_path3.default.extname(build.buildDirectory).toLowerCase() !== ".zip") {
+    throw new Error("Build source must be a folder or a ZIP archive.");
   }
+  const chunks = directory ? await chunkBuildDirectory(build.buildDirectory) : null;
+  const hashes = directory ? null : await hashFile(build.buildDirectory);
+  const contentDigest = directory ? (0, import_node_crypto2.createHash)("sha256").update(JSON.stringify(chunks.entries)).digest("hex") : hashes.sha256Hex;
+  const idempotencyKey = plan.idempotencyKey ? (0, import_node_crypto2.createHash)("sha256").update(JSON.stringify([plan.idempotencyKey, build.branch ?? null, build.platform, build.filename])).digest("hex") : (0, import_node_crypto2.randomUUID)();
   const created = await postJson(gameApiUrl(plan, "/builds"), plan.token, {
     platform: build.platform,
     branch: build.branch,
     version: build.version,
     description: build.description,
     git_sha: build.gitSha,
-    archive_kind: "chunks",
+    archive_kind: directory ? "chunks" : "zip",
     filename: build.filename,
     byte_size: source.size,
     launch_path: build.launchPath,
+    checksum_md5: hashes?.md5Base64,
     launch_args: build.launchArgs,
     working_directory: build.workingDirectory,
-    source_ref: build.sourceRef
-  });
-  const manifest = await uploadChunkManifest(plan, created.id, build.buildDirectory, { log, pollIntervalMs, retryDelaysMs });
-  log(`Completing build ${created.id}`);
-  const completed = await postJson(`${plan.apiUrl}/api/game_builds/${created.id}/complete`, plan.token, {});
+    source_ref: { ...build.sourceRef, content_sha256: contentDigest }
+  }, { retryDelaysMs, headers: { "Idempotency-Key": idempotencyKey } });
+  if (created.status && !["pending", "ready"].includes(created.status)) {
+    throw new Error(`Build ${created.id} cannot resume from status ${created.status}.`);
+  }
+  let manifest = {};
+  let completionBody = {};
+  if (!created.status || created.status === "pending") {
+    if (directory) {
+      manifest = await uploadChunkManifest(plan, created.id, build.buildDirectory, { log, pollIntervalMs, retryDelaysMs, chunks });
+    } else {
+      completionBody.signed_id = created.signed_id;
+      if (created.upload_strategy === "multipart") {
+        const multipart = created.multipart_upload;
+        const parts = [];
+        for (const part of multipart.parts) {
+          const start = (part.part_number - 1) * multipart.part_size;
+          const end = Math.min(source.size, start + multipart.part_size) - 1;
+          const headers = await withRetries(`Part ${part.part_number}`, () => uploadFile(part.upload_url, part.upload_headers ?? {}, build.buildDirectory, end - start + 1, { start, end }));
+          const etag = headerValue(headers, "etag");
+          if (!etag) throw new Error(`Part ${part.part_number} returned no ETag.`);
+          parts.push({ part_number: part.part_number, etag });
+        }
+        completionBody.multipart_upload = { upload_id: multipart.upload_id, parts };
+      } else {
+        await withRetries("ZIP upload", () => uploadFile(created.upload_url, created.upload_headers ?? {}, build.buildDirectory, source.size));
+      }
+    }
+    log(`Completing build ${created.id}`);
+  }
+  const completed = created.status && created.status !== "pending" ? created : await postJson(`${plan.apiUrl}/api/game_builds/${created.id}/complete`, plan.token, completionBody, { retryDelaysMs });
   return {
     buildId: completed.id ?? created.id,
     platform: build.platform,
     version: build.version,
     gitSha: build.gitSha,
     filename: build.filename,
-    checksumSha256: null,
+    checksumSha256: hashes?.sha256Hex ?? null,
     sizeBytes: source.size,
     status: completed.status ?? "ready",
     readyAt: completed.ready_at,
@@ -379,9 +414,9 @@ async function uploadBuild(plan, build, { log = console.error, pollIntervalMs, r
 var CHUNK_ANNOUNCE_BATCH = 1e3;
 var CHUNK_UPLOAD_CONCURRENCY = 8;
 var MANIFEST_VERIFY_TIMEOUT_MS = 45 * 60 * 1e3;
-async function uploadChunkManifest(plan, buildId, buildDirectory, { log, pollIntervalMs = 5e3, retryDelaysMs }) {
+async function uploadChunkManifest(plan, buildId, buildDirectory, { log, pollIntervalMs = 5e3, retryDelaysMs, chunks }) {
   log(`Splitting ${buildDirectory} into chunks for zip downloads and recorder installs`);
-  const { entries, objects } = await chunkBuildDirectory(buildDirectory);
+  const { entries, objects } = chunks ?? await chunkBuildDirectory(buildDirectory);
   const objectList = [...objects.entries()];
   const totalBytes = objectList.reduce((sum, [, object]) => sum + object.size, 0);
   log(`${entries.length} entries in ${objectList.length} chunks (${formatBytes(totalBytes)})`);
@@ -605,16 +640,33 @@ async function directorySize(dir) {
   }
   return total;
 }
+async function hashFile(filePath) {
+  const md5 = (0, import_node_crypto2.createHash)("md5");
+  const sha256 = (0, import_node_crypto2.createHash)("sha256");
+  await new Promise((resolve, reject) => {
+    const stream = (0, import_node_fs3.createReadStream)(filePath);
+    stream.on("data", (chunk) => {
+      md5.update(chunk);
+      sha256.update(chunk);
+    });
+    stream.on("error", reject);
+    stream.on("end", resolve);
+  });
+  return {
+    md5Base64: md5.digest("base64"),
+    sha256Hex: sha256.digest("hex")
+  };
+}
 var REQUEST_RETRY_DELAYS_MS = [1e3, 2e3, 4e3, 8e3];
 var RETRYABLE_STATUSES = /* @__PURE__ */ new Set([408, 429]);
 var TransientRequestError = class extends Error {
 };
-async function postJson(url, token, body, { retryDelaysMs = [] } = {}) {
+async function postJson(url, token, body, { retryDelaysMs = [], headers = {} } = {}) {
   return withRequestRetries(
     retryDelaysMs,
     () => requestJson(url, token, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...headers },
       body: JSON.stringify(compact(body))
     })
   );
@@ -626,14 +678,19 @@ async function requestJson(url, token, { method, headers = {}, body }) {
   let response;
   let text;
   try {
-    response = await fetch(url, { method, headers: { "Authorization": `Bearer ${token}`, ...headers }, body });
+    response = await fetch(url, { method, headers: { "Authorization": `Bearer ${token}`, "TestingFloor-Api-Version": "1", ...headers }, body });
     text = await response.text();
   } catch (error) {
     throw new TransientRequestError(`couldn't reach ${url}: ${error.cause?.code ?? error.cause?.message ?? error.message}`);
   }
   if (!response.ok) {
     const message = jsonError(text) || `${response.status} ${response.statusText} from ${url}`;
-    const transient = response.status >= 500 || RETRYABLE_STATUSES.has(response.status);
+    let retryable;
+    try {
+      retryable = JSON.parse(text)?.retryable;
+    } catch {
+    }
+    const transient = typeof retryable === "boolean" ? retryable : response.status >= 500 || RETRYABLE_STATUSES.has(response.status);
     throw transient ? new TransientRequestError(message) : new Error(message);
   }
   return text ? parseJsonResponse(text, url) : {};
@@ -660,10 +717,40 @@ function jsonError(text) {
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+function uploadFile(uploadUrl, uploadHeaders, filePath, size, { start, end, label = "Upload" } = {}) {
+  const url = new URL(uploadUrl);
+  const client = url.protocol === "https:" ? import_node_https.default : import_node_http.default;
+  const headers = compactHeaders({ ...uploadHeaders, "Content-Length": String(size) });
+  return new Promise((resolve, reject) => {
+    const request = client.request(url, { method: "PUT", headers }, (response) => {
+      let body = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => {
+        body += chunk;
+      });
+      response.on("end", () => {
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          resolve(response.headers);
+        } else {
+          reject(new Error(`${label} failed with ${response.statusCode}: ${body}`));
+        }
+      });
+    });
+    request.on("error", reject);
+    (0, import_node_fs3.createReadStream)(filePath, streamOptions({ start, end })).on("error", reject).pipe(request);
+  });
+}
 function compactHeaders(headers) {
   return Object.fromEntries(
     Object.entries(headers).filter(([, value]) => value !== void 0 && value !== null && value !== "")
   );
+}
+function headerValue(headers, name) {
+  const value = headers[name.toLowerCase()];
+  return Array.isArray(value) ? value[0] : value;
+}
+function streamOptions({ start, end }) {
+  return compact({ start, end });
 }
 function compact(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
@@ -765,6 +852,7 @@ async function runAction(env = import_node_process4.default.env, cwd = import_no
       filename: build.filename,
       gameId: inputs.gameId,
       gitSha: inputs.gitSha,
+      idempotencyKey: inputs.idempotencyKey,
       launchArg: build.launchArgs,
       launchPath: build.launchPath,
       organizationId: inputs.organizationId,
@@ -785,14 +873,16 @@ async function runAction(env = import_node_process4.default.env, cwd = import_no
   writeOutput("size-bytes", result.sizeBytes, env);
 }
 function readInputs(env) {
-  if (input(env, "archive")) {
-    throw new Error("The archive input was removed. Set build-directory to the unzipped build folder.");
-  }
+  const buildDirectory = input(env, "build-directory");
+  const archive = input(env, "archive");
+  if (buildDirectory && archive) throw new Error("Choose either build-directory or archive.");
+  if (!buildDirectory && !archive) throw new Error("Set build-directory or archive.");
   return {
     apiToken: requiredInput(env, "api-token"),
     apiUrl: input(env, "api-url") || "https://api.testingfloor.com",
     branch: input(env, "branch") || void 0,
-    buildDirectory: requiredInput(env, "build-directory"),
+    buildDirectory: buildDirectory || archive,
+    idempotencyKey: input(env, "idempotency-key") || (env.GITHUB_RUN_ID ? `github:${env.GITHUB_REPOSITORY}:${env.GITHUB_RUN_ID}:${env.GITHUB_JOB}` : void 0),
     description: input(env, "description") ?? void 0,
     filename: input(env, "filename"),
     gameId: requiredInput(env, "game-id"),
