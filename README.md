@@ -162,7 +162,7 @@ Use this repository directly as a GitHub Action:
 
 ```yaml
 - name: Upload build to Testing Floor
-  uses: capitalisminc/testingfloor-cli@b65ab66674096e5d1c3a0f8b3f73b0f24026f506
+  uses: capitalisminc/testingfloor-cli@ed33d5f06690e415a31bdcf9f6c6a2f71b4277aa
   with:
     api-token: ${{ secrets.TF_BUILD_UPLOAD_TOKEN }}
     organization-id: ${{ vars.TF_ORGANIZATION_ID }}
@@ -194,7 +194,7 @@ You can also run the CLI directly:
     TESTING_FLOOR_VERSION: ${{ github.ref_name }}
     TESTING_FLOOR_GIT_SHA: ${{ github.sha }}
   run: |
-    npx --yes --package=https://github.com/capitalisminc/testingfloor-cli/archive/b65ab66674096e5d1c3a0f8b3f73b0f24026f506.tar.gz testingfloor upload-build \
+    npx --yes --package=https://github.com/capitalisminc/testingfloor-cli/archive/ed33d5f06690e415a31bdcf9f6c6a2f71b4277aa.tar.gz testingfloor upload-build \
       --config testingfloor-builds.json \
       --source-ref run_id=${{ github.run_id }} \
       --source-ref run_number=${{ github.run_number }}
@@ -268,7 +268,7 @@ Image paths in a config file are resolved relative to that config file.
 
 ```yaml
 - name: Upload map to Testing Floor
-  uses: capitalisminc/testingfloor-cli/upload-map@b65ab66674096e5d1c3a0f8b3f73b0f24026f506
+  uses: capitalisminc/testingfloor-cli/upload-map@ed33d5f06690e415a31bdcf9f6c6a2f71b4277aa
   with:
     api-token: ${{ secrets.TF_MAPS_TOKEN }}
     organization-id: ${{ vars.TF_ORGANIZATION_ID }}
@@ -420,3 +420,12 @@ Both command groups require `telemetry:configure`. Their default update mode is
 +then replace every pin together. The package version prepared here is 0.4.0;
 +the source pin works without assuming that version has been published to npm.
 +
+
+
+### Immutable build identity and map corrections
+
+Use `--build-id` (or `TESTING_FLOOR_BUILD_ID`) with build and map uploads, and configure the SDK with exactly the same string. This is a game-owned artifact identity, separate from readable `--version` / `--app-version` labels and the server's numeric build record ID. The CLI preserves the identifier, including punctuation. A config file can set `buildId` at the root or per build/map; per-artifact values override the shared value. The GitHub Actions accept a `build-id` input. The build Action's existing `build-id` **output** remains the numeric server record ID.
+
+Published map geometry is immutable. Repeating the same build, level, variant and content reuses its revision. To fix a published map, pass `--corrects-map-id <id> --correction-reason "Fix the original scale"`. The default preserves previous captures and requires a **new** `--build-id` for future captures. Passing `--apply-to-history true` deliberately updates historical selections and bindings that used the old map; the server keeps an audit record. Repeating a correction recovers its original result.
+
+Map Actions and per-map config expose the same choices as `corrects-map-id`, `correction-reason`, `apply-to-history` / `correctsMapId`, `correctionReason`, `applyToHistory`. Map bounds and units describe the SDK's output coordinates. These options require the server's map-publication support; source changes do not publish an npm release.
