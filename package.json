@@ -1,6 +1,6 @@
 {
   "name": "@testingfloor/cli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Minimal CLI for uploading game builds to Testing Floor.",
   "type": "module",
   "bin": {
@@ -38,8 +38,7 @@
     "url": "git+https://github.com/capitalisminc/testingfloor-cli.git"
   },
   "dependencies": {
-    "@actions/core": "^3.0.1",
-    "@actions/tool-cache": "^4.0.0"
+    "@actions/core": "^3.0.1"
   },
   "devDependencies": {
     "esbuild": "^0.28.0"

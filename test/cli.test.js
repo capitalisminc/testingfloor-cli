@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
-import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -8,12 +8,10 @@ import test from "node:test";
 import { crc32 } from "node:zlib";
 
 import {
-  butlerDownloadUrl,
   parseJsonInput,
   readInputs,
   runAction,
-  resolveActionBuild,
-  resolveActionButlerPath
+  resolveActionBuild
 } from "../src/action-core.js";
 import {
   normalizeConfiguredBuilds,
@@ -58,18 +56,7 @@ test("parseArgs parses single build flags", () => {
   assert.deepEqual(parsed.options.sourceRef, ["run_id=123"]);
 });
 
-test("parseArgs parses the build directory and butler flags", () => {
-  const parsed = parseArgs([
-    "upload-build",
-    "--build-directory",
-    "build/windows",
-    "--butler-path",
-    "/usr/local/bin/butler"
-  ]);
 
-  assert.equal(parsed.options.buildDirectory, "build/windows");
-  assert.equal(parsed.options.butlerPath, "/usr/local/bin/butler");
-});
 
 test("build descriptions preserve arbitrary text across flags, environment, and config", async () => {
   const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
@@ -240,7 +227,6 @@ test("resolveUploadPlan accepts build directories", async () => {
     },
     {
       TESTING_FLOOR_API_TOKEN: "tf_test",
-      TESTING_FLOOR_BUTLER_PATH: "/usr/local/bin/butler",
       TESTING_FLOOR_ORGANIZATION_ID: "gamedepartment"
     },
     cwd
@@ -248,7 +234,6 @@ test("resolveUploadPlan accepts build directories", async () => {
 
   assert.equal(plan.builds[0].buildDirectory, buildDir);
   assert.equal(plan.builds[0].filename, "windows-build.zip");
-  assert.equal(plan.butlerPath, "/usr/local/bin/butler");
 });
 
 test("resolveUploadPlan supports config builds relative to config file", async () => {
@@ -377,8 +362,6 @@ test("readInputs accepts GitHub's hyphenated action input environment names", ()
     "INPUT_ORGANIZATION-ID": "gamedepartment",
     "INPUT_GAME-ID": "42",
     "INPUT_ARCHIVE-KIND": "wharf",
-    "INPUT_BUTLER-PATH": "/opt/butler",
-    "INPUT_BUTLER-VERSION": "15.26.1",
     INPUT_PLATFORM: "windows",
     "INPUT_BUILD-DIRECTORY": "build/Mono/Release/StandaloneWindows64",
     "INPUT_LAUNCH-PATH": "Game.exe",
@@ -389,8 +372,6 @@ test("readInputs accepts GitHub's hyphenated action input environment names", ()
   });
 
   assert.equal(inputs.apiToken, "tf_builds");
-  assert.equal(inputs.butlerPath, "/opt/butler");
-  assert.equal(inputs.butlerVersion, "15.26.1");
   assert.equal(inputs.gameId, "42");
   assert.equal(inputs.description, "  Input fixes\nNew tutorial  ");
   assert.equal(inputs.organizationId, "gamedepartment");
@@ -407,65 +388,9 @@ test("readInputs explains that the archive input was removed", () => {
   );
 });
 
-test("resolveActionButlerPath keeps butler setup inside the action", async () => {
-  assert.equal(
-    await resolveActionButlerPath({
-      butlerPath: "/opt/butler",
-      env: { GITHUB_ACTIONS: "true" },
-      setup: async () => {
-        throw new Error("setup should not run");
-      }
-    }),
-    "/opt/butler"
-  );
-  assert.equal(
-    await resolveActionButlerPath({
-      env: { GITHUB_ACTIONS: "true", TESTING_FLOOR_BUTLER_PATH: "/env/butler" },
-      setup: async () => {
-        throw new Error("setup should not run");
-      }
-    }),
-    "/env/butler"
-  );
-  assert.equal(
-    await resolveActionButlerPath({
-      env: {},
-      setup: async () => {
-        throw new Error("setup should not run outside GitHub Actions");
-      }
-    }),
-    "butler"
-  );
 
-  let setupCalled = false;
-  const managedPath = await resolveActionButlerPath({
-    butlerVersion: "15.26.1",
-    env: { GITHUB_ACTIONS: "true" },
-    setup: async ({ version }) => {
-      setupCalled = true;
-      assert.equal(version, "15.26.1");
-      return "/managed/butler";
-    }
-  });
 
-  assert.equal(setupCalled, true);
-  assert.equal(managedPath, "/managed/butler");
-});
 
-test("butlerDownloadUrl maps runner platforms to itch broth downloads", () => {
-  assert.equal(
-    butlerDownloadUrl({ platform: "linux", arch: "x64", version: "LATEST" }),
-    "https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default"
-  );
-  assert.equal(
-    butlerDownloadUrl({ platform: "darwin", arch: "arm64", version: "15.26.1" }),
-    "https://broth.itch.zone/butler/darwin-arm64/15.26.1/archive/default"
-  );
-  assert.equal(
-    butlerDownloadUrl({ platform: "win32", arch: "arm64", version: "LATEST" }),
-    "https://broth.itch.zone/butler/windows-amd64/LATEST/archive/default"
-  );
-});
 
 // failures maps "METHOD /path" to what its next requests get instead of an
 // answer: "reset" drops the connection, a number answers with that status and
@@ -555,7 +480,7 @@ function chunkDeliveryServer({ manifestStatuses, alreadyStored = 1, patchUpload 
 
 async function chunkDeliveryUpload(server, cwd, buildDir, options = {}) {
   return uploadBuild(
-    { apiUrl: serverUrl(server), butlerPath: await writeFakeButler(cwd), organizationId: "gamedepartment", gameId: "42", token: "tf_test" },
+    { apiUrl: serverUrl(server), organizationId: "gamedepartment", gameId: "42", token: "tf_test" },
     {
       buildDirectory: buildDir,
       filename: "game.zip",
@@ -570,7 +495,7 @@ async function chunkDeliveryUpload(server, cwd, buildDir, options = {}) {
   );
 }
 
-test("uploadBuild sends the wharf patch, then only new chunks and the manifest, and completes the build once they're verified", async (t) => {
+test("uploadBuild sends only missing chunks and completes only after verification", async (t) => {
   const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
   const buildDir = path.join(cwd, "game");
   await mkdir(path.join(buildDir, "Data"), { recursive: true });
@@ -586,8 +511,8 @@ test("uploadBuild sends the wharf patch, then only new chunks and the manifest, 
 
   assert.equal(result.buildId, 8);
   assert.equal(result.zipSizeBytes, 3_145_900);
-  assert.equal(state.createPayload.zip_delivery, "chunk_manifest");
-  assert.match(state.wharfBaseUrl, /zip_delivery=chunk_manifest/);
+  assert.equal(state.createPayload.archive_kind, "chunks");
+  assert.equal(state.wharfBaseUrl, null);
   assert.ok(state.announced.length >= 2, "the big file and the packed small file");
   assert.deepEqual(Object.keys(state.uploads).sort(), state.announced.slice(1).map((chunk) => chunk.sha256).sort(), "only missing chunks are uploaded");
   for (const [sha256, body] of Object.entries(state.uploads)) {
@@ -597,7 +522,7 @@ test("uploadBuild sends the wharf patch, then only new chunks and the manifest, 
   assert.equal(settings.crc32, crc32(Buffer.from("[game]\nfullscreen=1\n")));
   assert.equal(state.manifest.entries.find((entry) => entry.path === "Data").type, "directory");
   assert.equal(state.polls, 2);
-  assert.deepEqual(state.completePayload, { patch_signed_id: "patch-signed", signature_signed_id: "signature-signed" });
+  assert.deepEqual(state.completePayload, {});
   assert.equal(state.order.at(-1), "POST /api/game_builds/8/complete", "the build is offered only once its chunks are verified");
   assert.equal(state.order.at(-2), "GET /api/game_builds/8/manifest");
 });
@@ -617,7 +542,6 @@ test("the GitHub Action sends its plain text description to the build upload API
     "INPUT_ORGANIZATION-ID": "example-studio",
     "INPUT_GAME-ID": "my-game",
     "INPUT_BUILD-DIRECTORY": "game",
-    "INPUT_BUTLER-PATH": await writeFakeButler(cwd),
     INPUT_PLATFORM: "windows",
     "INPUT_LAUNCH-PATH": "Game.exe",
     INPUT_VERSION: "1.2.3",
@@ -628,36 +552,9 @@ test("the GitHub Action sends its plain text description to the build upload API
   assert.equal(state.createPayload.description, description);
 });
 
-test("uploadBuild uploads a large wharf patch in parts and completes with their ETags", async (t) => {
-  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
-  const buildDir = path.join(cwd, "game");
-  await mkdir(buildDir);
-  await writeFile(path.join(buildDir, "Game.exe"), "binary");
-  const { server, state } = chunkDeliveryServer({
-    manifestStatuses: [{ status: "verified", zip_size_bytes: 128 }],
-    patchUpload: (baseUrl) => ({
-      signed_id: "patch-signed",
-      upload_strategy: "multipart",
-      multipart_upload: {
-        upload_id: "upload-123",
-        part_size: 4,
-        parts: [1, 2, 3].map((part_number) => ({ part_number, upload_url: `${baseUrl}/parts/${part_number}`, upload_headers: {} }))
-      }
-    })
-  });
-  await listen(server);
-  t.after(() => server.close());
 
-  await chunkDeliveryUpload(server, cwd, buildDir);
 
-  assert.deepEqual(state.parts, [[1, "patc", "4"], [2, "h by", "4"], [3, "tes", "3"]]);
-  assert.deepEqual(state.completePayload.patch_multipart_upload, {
-    upload_id: "upload-123",
-    parts: [1, 2, 3].map((part_number) => ({ part_number, etag: `"etag-${part_number}"` }))
-  });
-});
-
-test("uploadBuild fails when Testing Floor rejects the chunks, but still completes the build for patch installs", async (t) => {
+test("uploadBuild never completes a build whose chunks failed verification", async (t) => {
   const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
   const buildDir = path.join(cwd, "game");
   await mkdir(buildDir);
@@ -670,8 +567,8 @@ test("uploadBuild fails when Testing Floor rejects the chunks, but still complet
   t.after(() => server.close());
 
   await assert.rejects(chunkDeliveryUpload(server, cwd, buildDir), /rejected build 8's chunks: Chunk abc doesn't match its SHA-256/);
-  assert.deepEqual(state.completePayload, { patch_signed_id: "patch-signed", signature_signed_id: "signature-signed" });
-  assert.equal(state.order.at(-1), "POST /api/game_builds/8/complete");
+  assert.equal(state.completePayload, null);
+  assert.equal(state.order.some((request) => request.endsWith("/complete")), false);
 });
 
 test("uploadBuild refuses a zip file where a build folder is expected", async () => {
@@ -1183,23 +1080,6 @@ function writeJson(response, status, body) {
   response.end(JSON.stringify(body));
 }
 
-async function writeFakeButler(cwd) {
-  const script = path.join(cwd, "butler");
-  await writeFile(
-    script,
-    `#!/usr/bin/env node
-const fs = require("node:fs");
-const args = process.argv.slice(2);
-if (args[0] !== "diff") {
-  throw new Error("expected diff command");
-}
-fs.writeFileSync(args[3], "patch bytes");
-fs.writeFileSync(args[3] + ".sig", "signature bytes");
-`
-  );
-  await chmod(script, 0o755);
-  return script;
-}
 
 async function smallBuild() {
   const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));

@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { spawn } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { access, mkdtemp, opendir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
@@ -30,7 +29,6 @@ const VALUE_OPTIONS = new Set([
   "bounds",
   "branch",
   "build-directory",
-  "butler-path",
   "config",
   "description",
   "filename",
@@ -56,7 +54,7 @@ const VALUE_OPTIONS = new Set([
   "world-units-per-meter"
 ]);
 const REMOVED_OPTIONS = {
-  "archive-kind": "--archive-kind was removed. Uploads always send the build directory as chunks for zip downloads, plus a wharf patch for the recorder."
+  "archive-kind": "--archive-kind was removed. Uploads send the build directory as chunks."
 };
 
 // deps lets bin/ pass the package version and tests swap out the browser,
@@ -228,13 +226,7 @@ export async function resolveUploadPlan(options, env = {}, cwd = process.cwd()) 
     config.organizationId,
     config.organization_id
   );
-  const butlerPath = firstPresent(
-    options.butlerPath,
-    env.TESTING_FLOOR_BUTLER_PATH,
-    config.butlerPath,
-    config.butler_path,
-    "butler"
-  );
+
   const gameId = firstPresent(options.gameId, env.TESTING_FLOOR_GAME_ID, config.gameId);
   const version = firstPresent(options.version, env.TESTING_FLOOR_VERSION, config.version);
   const description = options.description ?? env.TESTING_FLOOR_DESCRIPTION ?? config.description;
@@ -264,7 +256,6 @@ export async function resolveUploadPlan(options, env = {}, cwd = process.cwd()) 
 
   return {
     apiUrl,
-    butlerPath,
     token,
     organizationId: String(organizationId),
     gameId: String(gameId),
@@ -620,130 +611,26 @@ export function parseSourceRefEntries(entries) {
   }, {});
 }
 
-// Every build goes up the same way: a wharf patch the recorder updates from,
-// then the folder as content-addressed chunks plus a manifest, which Testing
-// Floor serves as the zip download and as the recorder's clean install. Only
-// chunks the game hasn't stored before are uploaded. The build is completed
-// once its chunks are verified, so it's never offered without them. If the
-// chunks fail, it's completed anyway so the recorder can still install it
-// from its patch, and the upload still fails.
+// A build becomes available only after every referenced chunk is verified.
 export async function uploadBuild(plan, build, { log = console.error, pollIntervalMs, retryDelaysMs = REQUEST_RETRY_DELAYS_MS } = {}) {
   const source = await pathInfo(build.buildDirectory, { allowDirectory: true, label: "Build directory" });
   if (!(await stat(build.buildDirectory)).isDirectory()) {
     throw new Error(`Build directory must be a folder, not a file: ${build.buildDirectory}`);
   }
-  log(`Creating ${build.platform} wharf patch from ${build.buildDirectory}`);
-
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), "testingfloor-wharf-"));
-  try {
-    const base = await fetchWharfBase(plan, build, { retryDelaysMs });
-    const targetSignaturePath = base.signatureUrl
-      ? await downloadBaseSignature(base.signatureUrl, tempDir)
-      : "/dev/null";
-    const patchPath = path.join(tempDir, "patch.pwr");
-    const signaturePath = `${patchPath}.sig`;
-
-    await runButlerDiff({
-      butlerPath: plan.butlerPath ?? "butler",
-      target: targetSignaturePath,
-      source: build.buildDirectory,
-      patchPath
-    });
-
-    const patch = await fileInfo(patchPath);
-    const signature = await fileInfo(signaturePath);
-    const patchHashes = await hashFile(patchPath);
-    const signatureHashes = await hashFile(signaturePath);
-
-    const createResponse = await postJson(gameApiUrl(plan, "/builds"), plan.token, {
-      platform: build.platform,
-      branch: build.branch,
-      version: build.version,
-      description: build.description,
-      git_sha: build.gitSha,
-      archive_kind: "wharf",
-      zip_delivery: "chunk_manifest",
-      filename: build.filename,
-      byte_size: source.size,
-      wharf_patch_from_build_id: base.buildId ?? undefined,
-      patch_byte_size: patch.size,
-      patch_checksum_md5: patchHashes.md5Base64,
-      signature_byte_size: signature.size,
-      signature_checksum_md5: signatureHashes.md5Base64,
-      launch_path: build.launchPath,
-      launch_args: build.launchArgs,
-      working_directory: build.workingDirectory,
-      source_ref: build.sourceRef
-    });
-
-    const uploads = createResponse.uploads ?? {};
-    log(`Uploading wharf signature (${formatBytes(signature.size)}) to build ${createResponse.id}`);
-    const signatureMultipart = await uploadArtifact(uploads.signature, signaturePath, signature.size, {
-      label: "Wharf signature",
-      log
-    });
-    log(`Uploading wharf patch (${formatBytes(patch.size)}) to build ${createResponse.id}`);
-    const patchMultipart = await uploadArtifact(uploads.patch, patchPath, patch.size, {
-      label: "Wharf patch",
-      log
-    });
-
-    let manifest = null;
-    let chunkError = null;
-    try {
-      manifest = await uploadChunkManifest(plan, createResponse.id, build.buildDirectory, { log, pollIntervalMs, retryDelaysMs });
-    } catch (error) {
-      chunkError = error;
-      log(`Chunk upload failed (${error.message}); completing the build so the recorder can still install it from its patch`);
-    }
-
-    log(`Completing build ${createResponse.id}`);
-    const completeResponse = await postJson(
-      `${plan.apiUrl}/api/game_builds/${createResponse.id}/complete`,
-      plan.token,
-      {
-        patch_signed_id: uploads.patch?.signed_id,
-        signature_signed_id: uploads.signature?.signed_id,
-        patch_multipart_upload: patchMultipart ?? undefined,
-        signature_multipart_upload: signatureMultipart ?? undefined
-      }
-    );
-
-    if (chunkError) {
-      throw chunkError;
-    }
-
-    return {
-      buildId: completeResponse.id ?? createResponse.id,
-      platform: build.platform,
-      version: build.version,
-      gitSha: build.gitSha,
-      filename: build.filename,
-      checksumSha256: completeResponse.checksum_sha256 ?? null,
-      sizeBytes: source.size,
-      status: completeResponse.status ?? "processing",
-      readyAt: completeResponse.ready_at,
-      zipSizeBytes: manifest?.zip_size_bytes ?? null
-    };
-  } finally {
-    await rm(tempDir, { force: true, recursive: true });
-  }
-}
-
-async function fetchWharfBase(plan, build, { retryDelaysMs }) {
-  const query = new URLSearchParams({ platform: build.platform });
-  if (build.branch) {
-    query.set("branch", build.branch);
-  }
-  query.set("zip_delivery", "chunk_manifest");
-  const response = await getJson(
-    gameApiUrl(plan, `/builds/wharf/base?${query.toString()}`),
-    plan.token,
-    { retryDelaysMs }
-  );
+  const created = await postJson(gameApiUrl(plan, "/builds"), plan.token, {
+    platform: build.platform, branch: build.branch, version: build.version,
+    description: build.description, git_sha: build.gitSha, archive_kind: "chunks",
+    filename: build.filename, byte_size: source.size, launch_path: build.launchPath,
+    launch_args: build.launchArgs, working_directory: build.workingDirectory, source_ref: build.sourceRef
+  });
+  const manifest = await uploadChunkManifest(plan, created.id, build.buildDirectory, { log, pollIntervalMs, retryDelaysMs });
+  log(`Completing build ${created.id}`);
+  const completed = await postJson(`${plan.apiUrl}/api/game_builds/${created.id}/complete`, plan.token, {});
   return {
-    buildId: response.build_id ?? response.buildId ?? null,
-    signatureUrl: response.signature_url ?? response.signatureUrl ?? null
+    buildId: completed.id ?? created.id, platform: build.platform, version: build.version,
+    gitSha: build.gitSha, filename: build.filename, checksumSha256: null,
+    sizeBytes: source.size, status: completed.status ?? "ready", readyAt: completed.ready_at,
+    zipSizeBytes: manifest.zip_size_bytes ?? null
   };
 }
 
@@ -863,53 +750,6 @@ function uploadBuffer(uploadUrl, uploadHeaders, body, { label = "Upload" } = {})
   });
 }
 
-async function downloadBaseSignature(signatureUrl, tempDir) {
-  const response = await fetch(signatureUrl);
-  if (!response.ok) {
-    throw new Error(`Base signature download failed with ${response.status}: ${await response.text()}`);
-  }
-
-  const signaturePath = path.join(tempDir, "base.pwr.sig");
-  await writeFile(signaturePath, Buffer.from(await response.arrayBuffer()));
-  return signaturePath;
-}
-
-function runButlerDiff({ butlerPath, target, source, patchPath }) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(butlerPath, ["diff", target, source, patchPath], {
-      stdio: ["ignore", "pipe", "pipe"]
-    });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk;
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk;
-    });
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      reject(new Error((stderr || stdout || `butler diff exited with ${code}`).trim()));
-    });
-  });
-}
-
-async function uploadArtifact(uploadSpec, filePath, size, { label, log }) {
-  if (!uploadSpec) {
-    throw new Error(`${label} upload response is missing.`);
-  }
-
-  if (uploadSpec.multipart_upload) {
-    return uploadMultipartFile(uploadSpec.multipart_upload, filePath, size, { log });
-  }
-
-  await uploadFile(uploadSpec.upload_url, uploadSpec.upload_headers ?? {}, filePath, size, { label });
-  return null;
-}
 
 async function readJson(filePath) {
   const raw = await readFile(filePath, "utf8");
@@ -1159,56 +999,6 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function uploadMultipartFile(multipartUpload, filePath, size, { log = console.error } = {}) {
-  const uploadId = multipartUpload.upload_id ?? multipartUpload.uploadId;
-  const partSize = Number(multipartUpload.part_size ?? multipartUpload.partSize);
-  const parts = multipartUpload.parts ?? [];
-
-  if (!uploadId) {
-    throw new Error("Multipart upload response is missing upload_id.");
-  }
-
-  if (!Number.isSafeInteger(partSize) || partSize <= 0) {
-    throw new Error("Multipart upload response has an invalid part_size.");
-  }
-
-  if (!Array.isArray(parts) || parts.length === 0) {
-    throw new Error("Multipart upload response is missing parts.");
-  }
-
-  const completedParts = [];
-  for (const part of parts) {
-    const partNumber = Number(part.part_number ?? part.partNumber);
-    if (!Number.isSafeInteger(partNumber) || partNumber <= 0) {
-      throw new Error("Multipart upload response has an invalid part number.");
-    }
-
-    const start = (partNumber - 1) * partSize;
-    const end = Math.min(start + partSize, size) - 1;
-    if (start >= size || end < start) {
-      throw new Error(`Multipart part ${partNumber} is outside the archive size.`);
-    }
-
-    const partLength = end - start + 1;
-    log(`Uploading part ${partNumber}/${parts.length} (${formatBytes(partLength)})`);
-    const headers = await uploadFile(part.upload_url ?? part.uploadUrl, part.upload_headers ?? {}, filePath, partLength, {
-      end,
-      label: `Multipart part ${partNumber}`,
-      start
-    });
-    const etag = headerValue(headers, "etag");
-    if (!etag) {
-      throw new Error(`Multipart part ${partNumber} did not return an ETag.`);
-    }
-
-    completedParts.push({ part_number: partNumber, etag });
-  }
-
-  return {
-    upload_id: uploadId,
-    parts: completedParts.sort((left, right) => left.part_number - right.part_number)
-  };
-}
 
 function uploadFile(uploadUrl, uploadHeaders, filePath, size, { start, end, label = "Upload" } = {}) {
   const url = new URL(uploadUrl);
@@ -1410,13 +1200,11 @@ Environment:
   TESTING_FLOOR_DESCRIPTION     Optional build description (up to 1000 characters)
   TESTING_FLOOR_MAP_VERSION     Telemetry map version number
   TESTING_FLOOR_GIT_SHA         Git SHA metadata (builds)
-  TESTING_FLOOR_BUTLER_PATH     Path to butler (makes the recorder's patch)
 
 Build options:
   --platform <platform>     windows, macos, or linux
   --build-directory <path>  The ready-to-run build folder
   --filename <name>         Name for the zip download, defaults to the folder name
-  --butler-path <path>      Path to butler (makes the recorder's patch)
   --version <version>       Version metadata
   --description <text>      Optional plain text, up to 1000 characters; website build list only
   --git-sha <sha>           Git SHA metadata

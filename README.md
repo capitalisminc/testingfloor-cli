@@ -61,11 +61,12 @@ Add `--description "Fixes input and updates the tutorial"` to include an optiona
 
 You point the CLI at the ready-to-run build folder; there's nothing else to choose. Each upload:
 
-1. Diffs the folder against the platform's previous build with `butler` and uploads the wharf patch. The desktop recorder updates testers' installs from it. The GitHub Action installs butler for you; when running the CLI directly, put `butler` on `PATH` or pass `--butler-path`.
-2. Splits the folder into content-addressed chunks of about 3 MiB. Boundaries follow the content, so an edit inside a large file only changes the chunks around it. Files under 256 KiB are packed together.
-3. Asks Testing Floor which chunks the game hasn't stored yet, and uploads only those.
-4. Sends the manifest (every folder, file and symlink with its permissions and checksum) and waits until Testing Floor has verified the chunks.
-5. Completes the build, which makes it available to testers. Testing Floor serves its zip download (named by `--filename`) and the desktop recorder's fresh installs straight from the verified chunks. If the chunks fail, the build is still completed so the recorder can install it from its patch, and the upload fails.
+1. Splits the folder into content-addressed chunks. Content defines the boundaries, so an edit inside a large file changes only nearby chunks. Small files are packed together.
+2. Uploads only chunks the game hasn't stored yet.
+3. Sends the manifest and waits until Testing Floor has verified every chunk.
+4. Completes the build, making it available for desktop installs, updates and ZIP downloads.
+
+Uploads need only Node.js. No external patch tool is required. If chunk verification fails, the build stays unavailable and the command fails.
 
 The first upload sends the whole build, uncompressed; later builds send only what changed.
 
@@ -137,7 +138,7 @@ Use this repository directly as a GitHub Action:
       }
 ```
 
-`build-directory` is the ready-to-run build folder; see [How builds are uploaded](#how-builds-are-uploaded). Butler is installed automatically. Use `butler-path` or `butler-version` only when you need to override that.
+`build-directory` is the ready-to-run build folder; see [How builds are uploaded](#how-builds-are-uploaded).
 
 The old `archive` and `archive-kind` inputs are no longer used. `archive-kind` only produces a warning and can be deleted; `archive` (a zip file) fails, because only a folder can be uploaded as chunks.
 
@@ -271,7 +272,6 @@ Build object:
 - `launchArgs`: optional array, defaults to `[]`.
 - `workingDirectory`: optional working directory inside the build folder, defaults to `"."`.
 - `filename`: optional name for the zip download. Defaults to the folder name plus `.zip`.
-- `butlerPath`: optional path to the butler executable. The GitHub Action installs butler automatically.
 
 Map config top-level:
 
@@ -301,7 +301,6 @@ Map object:
 - `TESTING_FLOOR_VERSION`
 - `TESTING_FLOOR_MAP_VERSION`
 - `TESTING_FLOOR_GIT_SHA`
-- `TESTING_FLOOR_BUTLER_PATH`
 - `TESTING_FLOOR_CONFIG_DIR`: folder for the saved login (see [Sign in](#sign-in))
 
 CLI flags override environment and config values.
