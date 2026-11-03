@@ -26,6 +26,10 @@ const ARRAY_OPTIONS = new Set(["launch-arg", "source-ref"]);
 const VALUE_OPTIONS = new Set([
   "api-url",
   "app-version",
+  "apply-to-history",
+  "build-id",
+  "corrects-map-id",
+  "correction-reason",
   "archive",
   "bounds",
   "branch",
@@ -108,6 +112,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, cwd 
     const log = parsed.options.json ? () => {} : console.error;
     const results = [];
     for (const map of plan.maps) {
+
       results.push(await uploadMap(plan, map, { log }));
     }
     process.stdout.write(`${JSON.stringify({ maps: results }, null, 2)}\n`);
@@ -302,6 +307,7 @@ export async function resolveUploadPlan(options, env = {}, cwd = process.cwd()) 
 
   const gameId = firstPresent(options.gameId, env.TESTING_FLOOR_GAME_ID, config.gameId);
   const version = firstPresent(options.version, env.TESTING_FLOOR_VERSION, config.version);
+  const buildIdentifier = firstPresent(options.buildId, env.TESTING_FLOOR_BUILD_ID, config.buildId, config.build_id);
   const description = options.description ?? env.TESTING_FLOOR_DESCRIPTION ?? config.description;
   const gitSha = firstPresent(options.gitSha, env.TESTING_FLOOR_GIT_SHA, env.GITHUB_SHA, config.gitSha);
   const sourceRef = {
@@ -318,6 +324,7 @@ export async function resolveUploadPlan(options, env = {}, cwd = process.cwd()) 
       configDir,
       cwd,
       commonVersion: version,
+      commonBuildIdentifier: buildIdentifier,
       commonDescription: description,
       commonGitSha: gitSha,
       commonSourceRef: sourceRef,
@@ -354,6 +361,9 @@ export async function resolveMapPlan(options, env = {}, cwd = process.cwd()) {
       options.worldUnitsPerMeter
   );
   const configuredMaps = Array.isArray(config.maps) ? config.maps : [];
+  if (configuredMaps.length > 0 && [options.correctsMapId, options.correctionReason, options.applyToHistory].some(value => value !== undefined)) {
+    throw new Error("Correction flags cannot be combined with configured maps; set correctsMapId, correctionReason and applyToHistory on each map instead.");
+  }
   if (cliMapRequested && configuredMaps.length > 0) {
     throw new Error("Use either --config maps or --level-id/--image flags, not both.");
   }
@@ -382,9 +392,10 @@ export async function resolveMapPlan(options, env = {}, cwd = process.cwd()) {
     config.map_version
   );
 
+  const buildIdentifier = firstPresent(options.buildId, env.TESTING_FLOOR_BUILD_ID, config.buildId, config.build_id);
   const rawMaps = cliMapRequested ? [mapFromOptions(options)] : configuredMaps;
   const maps = rawMaps.map((map) =>
-    normalizeMap(map, { configDir, cwd, commonAppVersion: appVersion, commonMapVersion: mapVersion })
+    normalizeMap(map, { configDir, cwd, commonAppVersion: appVersion, commonMapVersion: mapVersion, commonBuildIdentifier: buildIdentifier })
   );
 
   validateMapPlan({ organizationId, gameId, maps });
@@ -461,6 +472,10 @@ export async function uploadMap(plan, map, { log = console.error } = {}) {
     map_horizontal_axis: map.horizontalAxis,
     map_vertical_axis: map.verticalAxis,
     app_version: map.appVersion || undefined,
+    build_id: map.buildIdentifier ?? undefined,
+    corrects_map_id: map.correctsMapId ?? undefined,
+    correction_reason: map.correctionReason ?? undefined,
+    apply_to_history: map.applyToHistory ?? undefined,
     variant_key: map.variantKey || undefined,
     version: map.version || undefined,
     default_variant:
@@ -475,6 +490,7 @@ export async function uploadMap(plan, map, { log = console.error } = {}) {
     version: response.version ?? map.version ?? null,
     pinned: response.pinned ?? null,
     appVersion: response.app_version ?? map.appVersion ?? null,
+    buildIdentifier: response.build_id ?? map.buildIdentifier ?? null,
     variantKey: response.variant_key ?? map.variantKey ?? null,
     variantLabel: response.variant_label ?? null,
     defaultVariant: response.default_variant ?? map.defaultVariant ?? null,
@@ -495,6 +511,10 @@ function mapFromOptions(options) {
     horizontalAxis: options.horizontalAxis,
     verticalAxis: options.verticalAxis,
     appVersion: options.appVersion,
+    buildId: options.buildId,
+    correctsMapId: options.correctsMapId,
+    correctionReason: options.correctionReason,
+    applyToHistory: options.applyToHistory,
     variantKey: options.variantKey ?? options.variant,
     mapVersion: options.mapVersion,
     defaultVariant: options.defaultVariant,
@@ -502,7 +522,7 @@ function mapFromOptions(options) {
   };
 }
 
-function normalizeMap(map, { configDir, cwd, commonAppVersion, commonMapVersion }) {
+function normalizeMap(map, { configDir, cwd, commonAppVersion, commonMapVersion, commonBuildIdentifier }) {
   const image = map.image ?? map.path;
   const imagePath = image ? resolveBuildPath(image, map.fromConfig === false ? cwd : configDir) : null;
   const bounds = parseBoundsString(map.bounds);
@@ -518,6 +538,10 @@ function normalizeMap(map, { configDir, cwd, commonAppVersion, commonMapVersion 
     horizontalAxis: (map.horizontalAxis ?? map.map_horizontal_axis ?? "x").toLowerCase(),
     verticalAxis: (map.verticalAxis ?? map.map_vertical_axis ?? "z").toLowerCase(),
     appVersion: map.appVersion ?? map.app_version ?? commonAppVersion ?? null,
+    buildIdentifier: optionalBuildIdentifier(map.buildId ?? map.build_id ?? commonBuildIdentifier),
+    correctsMapId: optionalPositiveInteger(map.correctsMapId ?? map.corrects_map_id, "map.correctsMapId"),
+    correctionReason: optionalString(map.correctionReason ?? map.correction_reason),
+    applyToHistory: optionalBoolean(map.applyToHistory ?? map.apply_to_history, "map.applyToHistory"),
     variantKey: optionalString(map.variantKey ?? map.variant_key ?? map.variant),
     version: optionalPositiveInteger(map.mapVersion ?? map.map_version ?? map.version ?? commonMapVersion, "map.version"),
     defaultVariant: optionalBoolean(map.defaultVariant ?? map.default_variant, "map.defaultVariant"),
@@ -542,6 +566,13 @@ function validateMapPlan(plan) {
   }
 
   for (const map of plan.maps) {
+    if (map.correctsMapId && !map.correctionReason) throw new Error("Map corrections require --correction-reason.");
+    if (!map.correctsMapId && (map.correctionReason || map.applyToHistory !== null)) {
+      throw new Error("Correction reason and history choice require --corrects-map-id.");
+    }
+    if (map.correctsMapId && !map.applyToHistory && !map.buildIdentifier) {
+      throw new Error("Future-only map corrections require a new --build-id, or choose --apply-to-history true.");
+    }
     if (!map.levelId) {
       throw new Error("Missing levelId for map.");
     }
@@ -643,6 +674,14 @@ function optionalBoolean(value, name) {
   throw new Error(`${name} must be true or false.`);
 }
 
+function optionalBuildIdentifier(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string" || value.trim() === "" || Array.from(value).length > 255) {
+    throw new Error("buildId must be nonblank text of at most 255 characters.");
+  }
+  return value;
+}
+
 function optionalString(value) {
   if (value === undefined || value === null) {
     return null;
@@ -699,7 +738,7 @@ export async function uploadBuild(plan, build, { log = console.error, pollInterv
     ? createHash("sha256").update(JSON.stringify([plan.idempotencyKey, build.branch ?? null, build.platform, build.filename])).digest("hex")
     : randomUUID();
   const created = await postJson(gameApiUrl(plan, "/builds"), plan.token, {
-    platform: build.platform, branch: build.branch, version: build.version,
+    platform: build.platform, branch: build.branch, version: build.version, build_id: build.buildIdentifier ?? undefined,
     description: build.description, git_sha: build.gitSha, archive_kind: directory ? "chunks" : "zip",
     filename: build.filename, byte_size: source.size, launch_path: build.launchPath,
     checksum_md5: hashes?.md5Base64,
@@ -738,7 +777,7 @@ export async function uploadBuild(plan, build, { log = console.error, pollInterv
     ? created
     : await postJson(`${plan.apiUrl}/api/game_builds/${created.id}/complete`, plan.token, completionBody, { retryDelaysMs });
   return {
-    buildId: completed.id ?? created.id, platform: build.platform, version: build.version,
+    buildId: completed.id ?? created.id, buildIdentifier: completed.build_id ?? created.build_id ?? build.buildIdentifier ?? null, platform: build.platform, version: build.version,
     gitSha: build.gitSha, filename: build.filename, checksumSha256: hashes?.sha256Hex ?? null,
     sizeBytes: source.size, status: completed.status ?? "ready", readyAt: completed.ready_at,
     zipSizeBytes: manifest.zip_size_bytes ?? null
@@ -884,11 +923,12 @@ function buildFromOptions(options) {
     platform: options.platform,
     sourceRef: parseSourceRefEntries(options.sourceRef ?? []),
     version: options.version,
+    buildId: options.buildId,
     workingDirectory: options.workingDirectory
   };
 }
 
-function normalizeBuild(build, { configDir, cwd, commonVersion, commonDescription, commonGitSha, commonSourceRef, commonBranch }) {
+function normalizeBuild(build, { configDir, cwd, commonVersion, commonDescription, commonGitSha, commonSourceRef, commonBranch, commonBuildIdentifier }) {
   // The source may be a build folder or an existing ZIP archive.
   const directory = build.buildDirectory ?? build.build_directory ?? build.archive ?? build.path;
 
@@ -906,6 +946,7 @@ function normalizeBuild(build, { configDir, cwd, commonVersion, commonDescriptio
       ...objectValue(build.sourceRef ?? build.source_ref, "build.sourceRef")
     },
     version: build.version ?? commonVersion,
+    buildIdentifier: optionalBuildIdentifier(build.buildId ?? build.build_id ?? commonBuildIdentifier),
     workingDirectory: build.workingDirectory ?? build.working_directory ?? "."
   };
 }
@@ -1314,6 +1355,7 @@ Environment:
   TESTING_FLOOR_GAME_ID         Numeric game id
   TESTING_FLOOR_PLAYTEST_ID     Playtest for recording uploads
   TESTING_FLOOR_VERSION         Build version / map app_version metadata
+  TESTING_FLOOR_BUILD_ID        Immutable artifact ID shared with the SDK and map
   TESTING_FLOOR_DESCRIPTION     Optional build description (up to 1000 characters)
   TESTING_FLOOR_MAP_VERSION     Telemetry map version number
   TESTING_FLOOR_GIT_SHA         Git SHA metadata (builds)
@@ -1339,7 +1381,10 @@ Map options:
   --bounds <cx,cz,sx,sz>    World-space bounds: center_x,center_z,size_x,size_z
   --horizontal-axis <axis>  Horizontal world axis (x|y|z), defaults to x
   --vertical-axis <axis>    Vertical world axis (x|y|z), defaults to z
-  --app-version <version>   App version associated with this map snapshot
+  --app-version <version>   Human-readable app version (legacy routing fallback)
+  --corrects-map-id <id>     Explicitly correct a published map revision
+  --correction-reason <text> Required reason for the correction
+  --apply-to-history <bool>  true deliberately updates saved map selections; defaults to false
   --map-version <number>    Telemetry map version number to update
   --variant-key <key>       Variant key for floors, modes, or alternate map views
   --variant <key>           Alias for --variant-key
@@ -1368,6 +1413,7 @@ Telemetry schema options:
   --mode <merge|replace>   Merge mappings by default; replace removes unspecified mappings
 
 Common options:
+  --build-id <id>           Immutable artifact ID for build/map uploads (also TESTING_FLOOR_BUILD_ID)
   --api-url <url>           Testing Floor base URL
   --token <token>           API token
   --organization-id <id>    Organization slug or numeric id

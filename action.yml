@@ -16,6 +16,9 @@ inputs:
   organization-id:
     description: Testing Floor organization slug or numeric id. Can also be set with TESTING_FLOOR_ORGANIZATION_ID.
     required: false
+  build-id:
+    description: "Immutable artifact ID also sent by the SDK and map upload; separate from the numeric build-id output."
+    required: false
   platform:
     description: "Testing Floor platform: windows, macos, or linux."
     required: true
@@ -65,7 +68,7 @@ inputs:
 
 outputs:
   build-id:
-    description: Testing Floor game_build id.
+    description: Numeric Testing Floor build record ID.
   status:
     description: Final build status.
   ready-at:

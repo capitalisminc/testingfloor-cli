@@ -293,6 +293,7 @@ async function resolveUploadPlan(options, env = {}, cwd = import_node_process3.d
   );
   const gameId = firstPresent(options.gameId, env.TESTING_FLOOR_GAME_ID, config.gameId);
   const version = firstPresent(options.version, env.TESTING_FLOOR_VERSION, config.version);
+  const buildIdentifier = firstPresent(options.buildId, env.TESTING_FLOOR_BUILD_ID, config.buildId, config.build_id);
   const description = options.description ?? env.TESTING_FLOOR_DESCRIPTION ?? config.description;
   const gitSha = firstPresent(options.gitSha, env.TESTING_FLOOR_GIT_SHA, env.GITHUB_SHA, config.gitSha);
   const sourceRef = {
@@ -308,6 +309,7 @@ async function resolveUploadPlan(options, env = {}, cwd = import_node_process3.d
       configDir,
       cwd,
       commonVersion: version,
+      commonBuildIdentifier: buildIdentifier,
       commonDescription: description,
       commonGitSha: gitSha,
       commonSourceRef: sourceRef,
@@ -323,6 +325,13 @@ async function resolveUploadPlan(options, env = {}, cwd = import_node_process3.d
     idempotencyKey: firstPresent(options.idempotencyKey, env.TESTING_FLOOR_IDEMPOTENCY_KEY, config.idempotencyKey),
     builds
   };
+}
+function optionalBuildIdentifier(value) {
+  if (value === void 0 || value === null) return null;
+  if (typeof value !== "string" || value.trim() === "" || Array.from(value).length > 255) {
+    throw new Error("buildId must be nonblank text of at most 255 characters.");
+  }
+  return value;
 }
 function normalizeConfiguredBuilds(config) {
   if (Array.isArray(config.builds)) {
@@ -361,6 +370,7 @@ async function uploadBuild(plan, build, { log = console.error, pollIntervalMs, r
     platform: build.platform,
     branch: build.branch,
     version: build.version,
+    build_id: build.buildIdentifier ?? void 0,
     description: build.description,
     git_sha: build.gitSha,
     archive_kind: directory ? "chunks" : "zip",
@@ -403,6 +413,7 @@ async function uploadBuild(plan, build, { log = console.error, pollIntervalMs, r
   const completed = created.status && created.status !== "pending" ? created : await postJson(`${plan.apiUrl}/api/game_builds/${created.id}/complete`, plan.token, completionBody, { retryDelaysMs });
   return {
     buildId: completed.id ?? created.id,
+    buildIdentifier: completed.build_id ?? created.build_id ?? build.buildIdentifier ?? null,
     platform: build.platform,
     version: build.version,
     gitSha: build.gitSha,
@@ -535,10 +546,11 @@ function buildFromOptions(options) {
     platform: options.platform,
     sourceRef: parseSourceRefEntries(options.sourceRef ?? []),
     version: options.version,
+    buildId: options.buildId,
     workingDirectory: options.workingDirectory
   };
 }
-function normalizeBuild(build, { configDir, cwd, commonVersion, commonDescription, commonGitSha, commonSourceRef, commonBranch }) {
+function normalizeBuild(build, { configDir, cwd, commonVersion, commonDescription, commonGitSha, commonSourceRef, commonBranch, commonBuildIdentifier }) {
   const directory = build.buildDirectory ?? build.build_directory ?? build.archive ?? build.path;
   return {
     buildDirectory: directory ? resolveBuildPath(directory, build.fromConfig === false ? cwd : configDir) : null,
@@ -554,6 +566,7 @@ function normalizeBuild(build, { configDir, cwd, commonVersion, commonDescriptio
       ...objectValue(build.sourceRef ?? build.source_ref, "build.sourceRef")
     },
     version: build.version ?? commonVersion,
+    buildIdentifier: optionalBuildIdentifier(build.buildId ?? build.build_id ?? commonBuildIdentifier),
     workingDirectory: build.workingDirectory ?? build.working_directory ?? "."
   };
 }
@@ -851,6 +864,7 @@ async function runAction(env = import_node_process4.default.env, cwd = import_no
       apiUrl: inputs.apiUrl,
       buildDirectory: build.buildDirectory,
       branch: inputs.branch,
+      buildId: inputs.buildIdentifier,
       description: inputs.description,
       filename: build.filename,
       gameId: inputs.gameId,
@@ -884,6 +898,7 @@ function readInputs(env) {
     apiToken: requiredInput(env, "api-token"),
     apiUrl: input(env, "api-url") || "https://api.testingfloor.com",
     branch: input(env, "branch") || void 0,
+    buildIdentifier: input(env, "build-id") || void 0,
     buildDirectory: buildDirectory || archive,
     idempotencyKey: input(env, "idempotency-key") || (env.GITHUB_RUN_ID ? `github:${env.GITHUB_REPOSITORY}:${env.GITHUB_RUN_ID}:${env.GITHUB_JOB}` : void 0),
     description: input(env, "description") ?? void 0,

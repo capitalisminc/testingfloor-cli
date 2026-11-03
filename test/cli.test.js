@@ -1296,3 +1296,57 @@ test("ZIP multipart upload sends exact byte ranges and completion ETags", async 
   assert.deepEqual(Buffer.concat(received), source);
   assert.deepEqual(completed.multipart_upload, { upload_id: "example-upload", parts: [1, 2, 3].map(n => ({ part_number: n, etag: `"etag-${n}"` })) });
 });
+
+
+test("build identity resolves from flags, environment and per-artifact config without trimming", async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  const base = { organizationId: "example-studio", gameId: "my-game", token: "example-token", platform: "windows", buildDirectory: "game", launchPath: "game.exe", version: "1.2.3" };
+  const exact = " example,artifact ";
+  assert.equal((await resolveUploadPlan({ ...base, buildId: exact }, {}, cwd)).builds[0].buildIdentifier, exact);
+  assert.equal((await resolveUploadPlan(base, { TESTING_FLOOR_BUILD_ID: "example-env" }, cwd)).builds[0].buildIdentifier, "example-env");
+  await writeFile(path.join(cwd, "config.json"), JSON.stringify({ organizationId: base.organizationId, gameId: base.gameId, token: base.token, buildId: "example-common", builds: [{ platform: "windows", archive: "game.zip", launchPath: "game.exe", version: "1.2.3", buildId: "example-specific" }] }));
+  assert.equal((await resolveUploadPlan({ config: "config.json" }, {}, cwd)).builds[0].buildIdentifier, "example-specific");
+  await assert.rejects(resolveUploadPlan({ ...base, buildId: " " }, {}, cwd), /nonblank/);
+  await assert.rejects(resolveUploadPlan({ ...base, buildId: "x".repeat(256) }, {}, cwd), /255/);
+});
+
+test("map correction choices are explicit and serialized separately from display versions", async (t) => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  await writeFile(path.join(cwd, "example.png"), "png-bytes");
+  let received;
+  const server = http.createServer(async (request, response) => {
+    if (request.url.endsWith("/maps/direct_uploads")) return writeJson(response, 200, { image: { signed_id: "example-signed-map", upload_url: `${serverUrl(server)}/image`, upload_headers: {} } });
+    if (request.url === "/image") { await readRequestBody(request); response.end(); return; }
+    received = JSON.parse(await readRequestBody(request));
+    writeJson(response, 200, { id: 12, build_id: received.build_id });
+  });
+  await listen(server);t.after(() => server.close());
+  const base = { apiUrl: serverUrl(server), organizationId: "example-studio", gameId: "my-game", token: "example-token", levelId: "example-level", image: "example.png", bounds: "0,0,100,100", appVersion: "1.2.3", correctsMapId: "11", correctionReason: "Fix the original scale", applyToHistory: "true" };
+  const plan = await resolveMapPlan(base, { TESTING_FLOOR_BUILD_ID: "example,artifact" }, cwd);
+  const result = await uploadMap(plan, plan.maps[0], { log: () => {} });
+  assert.equal(received.build_id, "example,artifact");assert.equal(received.app_version, "1.2.3");
+  assert.equal(received.corrects_map_id, 11);assert.equal(received.correction_reason, "Fix the original scale");assert.equal(received.apply_to_history, true);
+  assert.equal(result.buildIdentifier, "example,artifact");
+  await assert.rejects(resolveMapPlan({ ...base, correctionReason: "" }, {}, cwd), /correction-reason/);
+  await assert.rejects(resolveMapPlan({ ...base, correctsMapId: undefined }, {}, cwd), /corrects-map-id/);
+  await assert.rejects(resolveMapPlan({ ...base, applyToHistory: "false" }, {}, cwd), /new --build-id/);
+  assert.equal((await resolveMapPlan({ ...base, applyToHistory: "false", buildId: "example-new" }, {}, cwd)).maps[0].applyToHistory, false);
+});
+
+test("Actions carry build identity and map correction controls", () => {
+  const env = { "INPUT_API-TOKEN": "example-token", "INPUT_GAME-ID": "my-game", "INPUT_BUILD-ID": "example-build", "INPUT_PLATFORM": "windows", "INPUT_ARCHIVE": "game.zip", "INPUT_LAUNCH-PATH": "game.exe", "INPUT_VERSION": "1.2.3", "INPUT_LEVEL-ID": "example-level", "INPUT_IMAGE": "map.png", "INPUT_BOUNDS": "0,0,100,100", "INPUT_CORRECTS-MAP-ID": "11", "INPUT_CORRECTION-REASON": "Fix original bounds", "INPUT_APPLY-TO-HISTORY": "true" };
+  assert.equal(readInputs(env).buildIdentifier, "example-build");
+  const map = readMapInputs(env);assert.equal(map.buildId, "example-build");assert.equal(map.correctsMapId, "11");assert.equal(map.correctionReason, "Fix original bounds");assert.equal(map.applyToHistory, "true");
+  assert.equal(parseArgs(["upload-map", "--build-id", "example-build", "--corrects-map-id=11", "--apply-to-history=true"]).options.applyToHistory, "true");
+});
+
+
+test("correction flags cannot silently override or disappear from configured maps", async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  await writeFile(path.join(cwd, "maps.json"), JSON.stringify({ organizationId: "example-studio", gameId: "my-game", token: "example-token", maps: [{ levelId: "example-level", image: "map.png", bounds: "0,0,100,100", buildId: "example-new", correctsMapId: 11, correctionReason: "Fix future bounds", applyToHistory: false }] }));
+  const options = { config: "maps.json" };
+  assert.equal((await resolveMapPlan(options, {}, cwd)).maps[0].applyToHistory, false);
+  for (const flags of [{ applyToHistory: "true" }, { applyToHistory: "false" }, { correctsMapId: "12" }, { correctionReason: "Change history" }]) {
+    await assert.rejects(resolveMapPlan({ ...options, ...flags }, {}, cwd), /Correction flags cannot be combined with configured maps/);
+  }
+});
