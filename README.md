@@ -162,7 +162,7 @@ Use this repository directly as a GitHub Action:
 
 ```yaml
 - name: Upload build to Testing Floor
-  uses: capitalisminc/testingfloor-cli@ed33d5f06690e415a31bdcf9f6c6a2f71b4277aa
+  uses: capitalisminc/testingfloor-cli@main
   with:
     api-token: ${{ secrets.TF_BUILD_UPLOAD_TOKEN }}
     organization-id: ${{ vars.TF_ORGANIZATION_ID }}
@@ -194,7 +194,7 @@ You can also run the CLI directly:
     TESTING_FLOOR_VERSION: ${{ github.ref_name }}
     TESTING_FLOOR_GIT_SHA: ${{ github.sha }}
   run: |
-    npx --yes --package=https://github.com/capitalisminc/testingfloor-cli/archive/ed33d5f06690e415a31bdcf9f6c6a2f71b4277aa.tar.gz testingfloor upload-build \
+    npx --yes @testingfloor/cli@latest upload-build \
       --config testingfloor-builds.json \
       --source-ref run_id=${{ github.run_id }} \
       --source-ref run_number=${{ github.run_number }}
@@ -268,7 +268,7 @@ Image paths in a config file are resolved relative to that config file.
 
 ```yaml
 - name: Upload map to Testing Floor
-  uses: capitalisminc/testingfloor-cli/upload-map@ed33d5f06690e415a31bdcf9f6c6a2f71b4277aa
+  uses: capitalisminc/testingfloor-cli/upload-map@main
   with:
     api-token: ${{ secrets.TF_MAPS_TOKEN }}
     organization-id: ${{ vars.TF_ORGANIZATION_ID }}
@@ -412,14 +412,6 @@ testingfloor set-event-presentation --organization-id example-studio --game-id m
 Both command groups require `telemetry:configure`. Their default update mode is
 `merge`; `replace` clears only the configuration owned by that resource.
 
-+
-+## Reproducible client versions
-+
-+The Actions and `npx` examples pin the same immutable implementation commit.
-+They require customer API version 1. Upgrade by reviewing a released tag or commit,
-+then replace every pin together. The package version prepared here is 0.4.0;
-+the source pin works without assuming that version has been published to npm.
-+
 
 
 ### Immutable build identity and map corrections
