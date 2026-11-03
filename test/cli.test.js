@@ -1339,3 +1339,14 @@ test("Actions carry build identity and map correction controls", () => {
   const map = readMapInputs(env);assert.equal(map.buildId, "example-build");assert.equal(map.correctsMapId, "11");assert.equal(map.correctionReason, "Fix original bounds");assert.equal(map.applyToHistory, "true");
   assert.equal(parseArgs(["upload-map", "--build-id", "example-build", "--corrects-map-id=11", "--apply-to-history=true"]).options.applyToHistory, "true");
 });
+
+
+test("correction flags cannot silently override or disappear from configured maps", async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "testingfloor-cli-"));
+  await writeFile(path.join(cwd, "maps.json"), JSON.stringify({ organizationId: "example-studio", gameId: "my-game", token: "example-token", maps: [{ levelId: "example-level", image: "map.png", bounds: "0,0,100,100", buildId: "example-new", correctsMapId: 11, correctionReason: "Fix future bounds", applyToHistory: false }] }));
+  const options = { config: "maps.json" };
+  assert.equal((await resolveMapPlan(options, {}, cwd)).maps[0].applyToHistory, false);
+  for (const flags of [{ applyToHistory: "true" }, { applyToHistory: "false" }, { correctsMapId: "12" }, { correctionReason: "Change history" }]) {
+    await assert.rejects(resolveMapPlan({ ...options, ...flags }, {}, cwd), /Correction flags cannot be combined with configured maps/);
+  }
+});

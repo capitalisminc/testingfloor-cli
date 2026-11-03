@@ -428,4 +428,6 @@ Use `--build-id` (or `TESTING_FLOOR_BUILD_ID`) with build and map uploads, and c
 
 Published map geometry is immutable. Repeating the same build, level, variant and content reuses its revision. To fix a published map, pass `--corrects-map-id <id> --correction-reason "Fix the original scale"`. The default preserves previous captures and requires a **new** `--build-id` for future captures. Passing `--apply-to-history true` deliberately updates historical selections and bindings that used the old map; the server keeps an audit record. Repeating a correction recovers its original result.
 
+Correction flags cannot be combined with a config containing maps; set the correction choices on each configured map.
+
 Map Actions and per-map config expose the same choices as `corrects-map-id`, `correction-reason`, `apply-to-history` / `correctsMapId`, `correctionReason`, `applyToHistory`. Map bounds and units describe the SDK's output coordinates. These options require the server's map-publication support; source changes do not publish an npm release.

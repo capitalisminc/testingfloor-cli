@@ -361,6 +361,9 @@ export async function resolveMapPlan(options, env = {}, cwd = process.cwd()) {
       options.worldUnitsPerMeter
   );
   const configuredMaps = Array.isArray(config.maps) ? config.maps : [];
+  if (configuredMaps.length > 0 && [options.correctsMapId, options.correctionReason, options.applyToHistory].some(value => value !== undefined)) {
+    throw new Error("Correction flags cannot be combined with configured maps; set correctsMapId, correctionReason and applyToHistory on each map instead.");
+  }
   if (cliMapRequested && configuredMaps.length > 0) {
     throw new Error("Use either --config maps or --level-id/--image flags, not both.");
   }
